@@ -1,0 +1,142 @@
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowRight, Plus, Users, Globe, Lock, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FamilySettingsForm } from "@/components/families/family-settings-form";
+import { PersonsList } from "@/components/persons/persons-list";
+
+interface Props {
+  params: Promise<{ id: string }>;
+}
+
+export default async function FamilyDetailPage({ params }: Props) {
+  const { id } = await params;
+  const session = await auth();
+  const user = session!.user;
+  const isSystemAdmin = user.accountType === "SYSTEM_ADMIN";
+
+  const family = await db.family.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      _count: { select: { persons: true } },
+      adminAssignments: {
+        where: { isActive: true },
+        include: { user: { select: { id: true, fullName: true } } },
+      },
+      persons: {
+        where: { deletedAt: null },
+        orderBy: [{ isLiving: "desc" }, { fullName: "asc" }],
+        take: 50,
+        select: {
+          id: true,
+          fullName: true,
+          gender: true,
+          isLiving: true,
+          birthDate: true,
+          deathDate: true,
+          visibilityLevel: true,
+        },
+      },
+    },
+  });
+
+  if (!family) notFound();
+
+  const isFamilyAdmin = isSystemAdmin || family.adminAssignments.some((a) => a.user.id === user.id);
+  if (!isFamilyAdmin) notFound();
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/families" className="text-muted-foreground hover:text-foreground">
+            <ArrowRight className="h-5 w-5" />
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-foreground">عائلة {family.name}</h1>
+              <Badge variant={family.isPublic ? "public" : "private"}>
+                {family.isPublic ? <><Globe className="h-3 w-3 ml-1" />عامة</> : <><Lock className="h-3 w-3 ml-1" />خاصة</>}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {family._count.persons} فرد مسجّل
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/family/${family.slug}`} target="_blank">
+              <ExternalLink className="h-3.5 w-3.5 ml-1" />
+              العرض العام
+            </Link>
+          </Button>
+          <Button variant="gold" size="sm" asChild>
+            <Link href={`/dashboard/families/${id}/add-person`}>
+              <Plus className="h-4 w-4 ml-1" />
+              إضافة فرد
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Persons list */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                أفراد العائلة ({family._count.persons})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <PersonsList persons={family.persons} familyId={id} canManage={isFamilyAdmin} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Settings */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">إعدادات العائلة</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FamilySettingsForm
+                familyId={id}
+                initialData={{
+                  name: family.name,
+                  originSummary: family.originSummary ?? "",
+                  isPublic: family.isPublic,
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Admins */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">المسؤولون</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {family.adminAssignments.map((a) => (
+                <div key={a.id} className="flex items-center gap-2 text-sm">
+                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-accent">
+                    {a.user.fullName[0]}
+                  </div>
+                  <span className="text-foreground">{a.user.fullName}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

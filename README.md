@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# حديقة العائلات — Families Tree
 
-## Getting Started
+منصة لتسجيل وعرض أشجار العائلات وربطها ببعضها.
 
-First, run the development server:
+## المتطلبات
+
+- Node.js 18+
+- PostgreSQL (محلي أو Supabase أو Neon)
+
+## التشغيل
+
+### 1. إعداد قاعدة البيانات
+
+```bash
+cp .env.example .env
+# عدّل DATABASE_URL في .env
+```
+
+### 2. تثبيت الحزم
+
+```bash
+npm install
+```
+
+### 3. إنشاء الجداول
+
+```bash
+npm run db:push
+```
+
+### 4. بيانات تجريبية (اختياري)
+
+```bash
+npm run db:seed
+```
+
+يُنشئ مدير النظام: `admin@families-tree.local` / `Admin@1234`
+وعائلة تجريبية: **عائلة الراشدي** (عامة، 4 أفراد)
+
+### 5. تشغيل التطبيق
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## الصفحات
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| المسار | الوصف |
+| --- | --- |
+| `/` | حديقة العائلات (عرض عام) |
+| `/login` | تسجيل الدخول |
+| `/register` | إنشاء حساب |
+| `/family/[slug]` | شجرة العائلة التفاعلية |
+| `/dashboard` | لوحة تحكم المستخدم |
+| `/dashboard/families` | إدارة العائلات |
+| `/dashboard/requests` | الطلبات والمراجعة |
+| `/admin` | لوحة مدير النظام |
+| `/admin/users` | إدارة المستخدمين |
 
-## Learn More
+## التقنيات
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js 16** (App Router, Turbopack)
+- **Prisma 7** + PostgreSQL + Closure Table
+- **NextAuth v5** (JWT + Credentials)
+- **@xyflow/react** (شجرة العائلة التفاعلية)
+- **Tailwind CSS v4** + shadcn/ui (RTL-first)
+- **IBM Plex Sans Arabic**

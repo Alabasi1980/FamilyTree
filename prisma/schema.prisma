@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===========================
+// ENUMS
+// ===========================
+
+enum AccountType {
+  SYSTEM_ADMIN
+  MEMBER
+  VISITOR
+}
+
+enum VisibilityLevel {
+  PUBLIC
+  MEMBER
+  ADMIN
+  SHARED_LINK
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MarriageStatus {
+  ACTIVE
+  ENDED
+  HISTORICAL
+  UNDOCUMENTED
+}
+
+enum FamilyLinkType {
+  KINSHIP
+  IN_LAW
+}
+
+enum FamilyLinkStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EditRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EditRequestType {
+  ADD_PERSON
+  EDIT_PERSON
+  ADD_RELATION
+  EDIT_RELATION
+  ADD_FAMILY_INFO
+  EDIT_FAMILY_INFO
+}
+
+enum TargetType {
+  PERSON
+  FAMILY
+  RELATION
+}
+
+enum AdminRequestType {
+  CREATE_FAMILY_AND_ADMINISTER
+  BECOME_FAMILY_ADMIN
+  JOIN_FAMILY_ADMINS
+}
+
+enum AdminRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AdminDecisionType {
+  APPROVE_NEW_FAMILY_ADMIN
+  APPROVE_JOIN_EXISTING_ADMINS
+  TRANSFER_FAMILY_OWNERSHIP
+  REJECT
+}
+
+enum ShareLinkTargetType {
+  FAMILY
+  WORKSPACE
+}
+
+// ===========================
+// CORE MODELS
+// ===========================
+
+model User {
+  id            String      @id @default(cuid())
+  name          String?
+  fullName      String?
+  email         String?     @unique
+  emailVerified DateTime?
+  phone         String?     @unique
+  image         String?
+  accountType   AccountType @default(VISITOR)
+  passwordHash  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+
+  // Auth
+  sessions    Session[]
+  accounts    Account[]
+
+  // Relations
+  familyAdminAssignments FamilyAdminAssignment[]
+  editRequestsSubmitted  EditRequest[]           @relation("EditRequestSubmitter")
+  editRequestsReviewed   EditRequest[]           @relation("EditRequestReviewer")
+  adminRequestsSubmitted AdminRequest[]          @relation("AdminRequestSubmitter")
+  adminRequestsReviewed  AdminRequest[]          @relation("AdminRequestReviewer")
+  shareLinksCreated      ShareLink[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ===========================
+// FAMILY & WORKSPACE
+// ===========================
+
+model Family {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  originSummary    String?
+  historicalNotes  String?
+  isPublic         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  persons          Person[]
+  adminAssignments FamilyAdminAssignment[]
+  familyLinksA     FamilyLink[]            @relation("FamilyLinkA")
+  familyLinksB     FamilyLink[]            @relation("FamilyLinkB")
+  workspaceFamilies WorkspaceFamily[]
+  editRequests     EditRequest[]
+  adminRequests    AdminRequest[]
+  shareLinks       ShareLink[]
+
+  @@index([slug])
+}
+
+model Workspace {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  families  WorkspaceFamily[]
+  shareLinks ShareLink[]
+}
+
+model WorkspaceFamily {
+  id          String    @id @default(cuid())
+  workspaceId String
+  familyId    String
+  addedAt     DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  family      Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, familyId])
+}
+
+model FamilyAdminAssignment {
+  id               String    @id @default(cuid())
+  familyId         String
+  userId           String
+  isActive         Boolean   @default(true)
+  assignedByUserId String?
+  assignedAt       DateTime  @default(now())
+  endedAt          DateTime?
+  notes            String?
+
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, isActive])
+  @@index([userId])
+}
+
+model FamilyLink {
+  id          String           @id @default(cuid())
+  familyAId   String
+  familyBId   String
+  linkType    FamilyLinkType
+  description String?
+  status      FamilyLinkStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+
+  familyA Family @relation("FamilyLinkA", fields: [familyAId], references: [id])
+  familyB Family @relation("FamilyLinkB", fields: [familyBId], references: [id])
+
+  @@unique([familyAId, familyBId])
+  @@index([familyAId])
+  @@index([familyBId])
+}
+
+// ===========================
+// PERSON & RELATIONS
+// ===========================
+
+model Person {
+  id              String          @id @default(cuid())
+  familyId        String
+  fullName        String
+  gender          Gender
+  birthDate       DateTime?
+  deathDate       DateTime?
+  isLiving        Boolean         @default(true)
+  biography       String?
+  photoUrl        String?
+  visibilityLevel VisibilityLevel @default(PUBLIC)
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  parentRelations    ParentChildRelation[] @relation("ParentPerson")
+  childRelations     ParentChildRelation[] @relation("ChildPerson")
+  marriagesAsPersonA MarriageRelation[]    @relation("MarriagePersonA")
+  marriagesAsPersonB MarriageRelation[]    @relation("MarriagePersonB")
+
+  // Closure table relations
+  ancestorIn   PersonAncestry[] @relation("AncestorPerson")
+  descendantIn PersonAncestry[] @relation("DescendantPerson")
+
+  @@index([familyId])
+  @@index([fullName])
+}
+
+model ParentChildRelation {
+  id             String   @id @default(cuid())
+  parentPersonId String
+  childPersonId  String
+  createdAt      DateTime @default(now())
+
+  parent Person @relation("ParentPerson", fields: [parentPersonId], references: [id], onDelete: Cascade)
+  child  Person @relation("ChildPerson", fields: [childPersonId], references: [id], onDelete: Cascade)
+
+  @@unique([parentPersonId, childPersonId])
+  @@index([parentPersonId])
+  @@index([childPersonId])
+}
+
+model MarriageRelation {
+  id           String         @id @default(cuid())
+  personAId    String
+  personBId    String
+  marriageDate DateTime?
+  status       MarriageStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  personA Person @relation("MarriagePersonA", fields: [personAId], references: [id], onDelete: Cascade)
+  personB Person @relation("MarriagePersonB", fields: [personBId], references: [id], onDelete: Cascade)
+
+  @@unique([personAId, personBId])
+  @@index([personAId])
+  @@index([personBId])
+}
+
+// Closure Table for efficient ancestor/descendant queries
+model PersonAncestry {
+  id           String @id @default(cuid())
+  ancestorId   String
+  descendantId String
+  depth        Int    // 0 = self, 1 = parent, 2 = grandparent, etc.
+
+  ancestor   Person @relation("AncestorPerson", fields: [ancestorId], references: [id], onDelete: Cascade)
+  descendant Person @relation("DescendantPerson", fields: [descendantId], references: [id], onDelete: Cascade)
+
+  @@unique([ancestorId, descendantId])
+  @@index([ancestorId])
+  @@index([descendantId])
+}
+
+// ===========================
+// REQUESTS & GOVERNANCE
+// ===========================
+
+model EditRequest {
+  id                  String            @id @default(cuid())
+  requestType         EditRequestType
+  targetType          TargetType
+  targetId            String?
+  familyId            String
+  submittedByUserId   String
+  payloadJson         Json
+  status              EditRequestStatus @default(PENDING)
+  reviewNotes         String?
+  reviewedByUserId    String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  family           Family @relation(fields: [familyId], references: [id])
+  submittedBy      User   @relation("EditRequestSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy       User?  @relation("EditRequestReviewer", fields: [reviewedByUserId], references: [id])
+
+  @@index([familyId, status])
+  @@index([submittedByUserId])
+}
+
+model AdminRequest {
+  id                    String             @id @default(cuid())
+  requestType           AdminRequestType
+  targetFamilyId        String?
+  proposedFamilyName    String?
+  submittedByUserId     String
+  currentReviewerUserId String?
+  status                AdminRequestStatus @default(PENDING)
+  decisionType          AdminDecisionType?
+  notes                 String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  targetFamily  Family? @relation(fields: [targetFamilyId], references: [id])
+  submittedBy   User    @relation("AdminRequestSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy    User?   @relation("AdminRequestReviewer", fields: [currentReviewerUserId], references: [id])
+
+  @@index([status])
+  @@index([submittedByUserId])
+  @@index([targetFamilyId])
+}
+
+// ===========================
+// SHARE LINKS
+// ===========================
+
+model ShareLink {
+  id               String              @id @default(cuid())
+  targetType       ShareLinkTargetType
+  familyId         String?
+  workspaceId      String?
+  token            String              @unique @default(cuid())
+  passwordHash     String?
+  expiresAt        DateTime?
+  isActive         Boolean             @default(true)
+  createdByUserId  String
+  createdAt        DateTime            @default(now())
+
+  createdBy User       @relation(fields: [createdByUserId], references: [id])
+  family    Family?    @relation(fields: [familyId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([token])
+  @@index([familyId])
+  @@index([workspaceId])
+}

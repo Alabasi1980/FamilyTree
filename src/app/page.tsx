@@ -1,65 +1,116 @@
-import Image from "next/image";
+import { Suspense } from "react";
+import { Navbar } from "@/components/layout/navbar";
+import { FamilyCard } from "@/components/families/family-card";
+import { db } from "@/lib/db";
+import type { Family } from "@/generated/prisma/client";
+import { Search, TreePine, Leaf } from "lucide-react";
 
-export default function Home() {
+type FamilyWithCount = Family & { _count: { persons: number } };
+
+async function FamiliesGarden() {
+  const families = await db.family.findMany({
+    where: { isPublic: true, deletedAt: null },
+    include: {
+      _count: { select: { persons: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 24,
+  });
+
+  if (families.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Leaf className="h-16 w-16 text-muted-foreground/40 mb-4" />
+        <p className="text-muted-foreground text-lg">لا توجد عائلات عامة حتى الآن</p>
+        <p className="text-muted-foreground/60 text-sm mt-1">كن أول من يضيف عائلته</p>
+      </div>
+    );
+  }
+
+  const getSize = (count: number): "small" | "medium" | "large" => {
+    if (count >= 50) return "large";
+    if (count >= 15) return "medium";
+    return "small";
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-min">
+      {(families as FamilyWithCount[]).map((family) => (
+        <FamilyCard
+          key={family.id}
+          id={family.id}
+          name={family.name}
+          slug={family.slug}
+          memberCount={family._count.persons}
+          isPublic={family.isPublic}
+          updatedAt={family.updatedAt}
+          originSummary={family.originSummary}
+          size={getSize(family._count.persons)}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+      ))}
+    </div>
+  );
+}
+
+function FamiliesGardenSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-52 rounded-xl border border-border/40 bg-card/40 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
+        {/* Hero */}
+        <section className="text-center py-12 mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-6">
+            <TreePine className="h-8 w-8 text-accent" />
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+            حديقة العائلات
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
+            اكتشف تاريخ العائلات، تتبع الأنساب، وابنِ شجرة عائلتك بطريقة بصرية سهلة
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+          {/* Search bar */}
+          <div className="relative max-w-md mx-auto mt-8">
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="ابحث عن عائلة أو شخص..."
+              className="w-full h-12 rounded-xl border border-border bg-card/60 pr-12 pl-4 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          </div>
+        </section>
+
+        {/* Families Garden */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-foreground">
+              العائلات المسجّلة
+            </h2>
+          </div>
+
+          <Suspense fallback={<FamiliesGardenSkeleton />}>
+            <FamiliesGarden />
+          </Suspense>
+        </section>
       </main>
+
+      <footer className="border-t border-border/40 py-6 text-center text-sm text-muted-foreground">
+        حديقة العائلات — حفظ التاريخ العائلي للأجيال القادمة
+      </footer>
     </div>
   );
 }

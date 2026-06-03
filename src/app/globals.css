@@ -1,26 +1,151 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =============================================
+   FAMILIES TREE — Design System
+   Theme: Premium Garden + Practical Family Graph
+   Direction: RTL-first, Arabic interface
+   ============================================= */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* === Brand Colors === */
+
+  /* Backgrounds */
+  --background: 160 20% 8%;         /* deep forest-charcoal #0f1a14 */
+  --background-secondary: 100 15% 12%; /* olive dark #192114 */
+  --card: 150 18% 11%;              /* slightly lighter than bg */
+  --card-foreground: 45 30% 92%;    /* warm white #f0ead8 */
+
+  /* Text */
+  --foreground: 45 30% 92%;         /* warm white #f0ead8 */
+  --foreground-secondary: 40 15% 68%; /* beige-gray #b5a98a */
+  --muted: 150 10% 18%;
+  --muted-foreground: 40 12% 58%;   /* soft beige */
+
+  /* Accent — muted gold (used sparingly) */
+  --accent: 42 55% 52%;             /* muted gold #c8962e */
+  --accent-foreground: 45 30% 95%;
+
+  /* Primary — forest green */
+  --primary: 145 35% 32%;           /* forest green #2d6647 */
+  --primary-foreground: 45 30% 95%;
+
+  /* Secondary — olive */
+  --secondary: 90 20% 22%;          /* olive #374a28 */
+  --secondary-foreground: 45 25% 88%;
+
+  /* States */
+  --success: 142 50% 38%;           /* calm green */
+  --warning: 38 90% 52%;            /* amber */
+  --destructive: 0 60% 45%;         /* muted red */
+  --destructive-foreground: 45 30% 95%;
+  --info: 210 60% 50%;              /* calm blue */
+
+  /* Borders */
+  --border: 150 12% 22%;
+  --input: 150 12% 22%;
+  --ring: 42 55% 52%;               /* gold focus ring */
+
+  /* Popover / overlay */
+  --popover: 150 18% 10%;
+  --popover-foreground: 45 30% 92%;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Typography */
+  --font-arabic: "IBM Plex Sans Arabic", "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Light mode override (optional, dark is primary) */
+.light {
+  --background: 45 30% 97%;
+  --background-secondary: 90 15% 92%;
+  --card: 0 0% 100%;
+  --card-foreground: 160 25% 12%;
+  --foreground: 160 25% 10%;
+  --foreground-secondary: 150 10% 38%;
+  --muted: 90 15% 93%;
+  --muted-foreground: 150 8% 45%;
+  --accent: 42 65% 45%;
+  --accent-foreground: 160 25% 10%;
+  --primary: 145 40% 30%;
+  --primary-foreground: 45 30% 97%;
+  --secondary: 90 20% 88%;
+  --secondary-foreground: 160 25% 15%;
+  --border: 90 12% 82%;
+  --input: 90 12% 82%;
+  --ring: 42 65% 45%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 160 25% 10%;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: hsl(var(--background));
+  --color-background-secondary: hsl(var(--background-secondary));
+  --color-foreground: hsl(var(--foreground));
+  --color-foreground-secondary: hsl(var(--foreground-secondary));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-arabic);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* =============================================
+   BASE STYLES
+   ============================================= */
+
+* {
+  border-color: hsl(var(--border));
+  outline-color: hsl(var(--ring));
+}
+
+html {
+  font-family: var(--font-arabic);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-arabic);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* RTL scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background-secondary));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
 }
