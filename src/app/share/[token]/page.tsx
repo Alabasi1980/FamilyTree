@@ -1,38 +1,80 @@
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { Navbar } from "@/components/layout/navbar";
 import { FamilyTree } from "@/components/tree/family-tree";
 import { Badge } from "@/components/ui/badge";
-import { Users, TreePine, Globe, Lock } from "lucide-react";
+import { Users, TreePine, Globe, Lock, AlertTriangle } from "lucide-react";
+import SharePasswordForm from "./password-form";
 
 interface Props {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ token: string }>;
 }
 
-export default async function FamilyPublicPage({ params }: Props) {
-  const { slug } = await params;
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const isSystemAdmin = session?.user?.accountType === "SYSTEM_ADMIN";
-  const isLoggedIn = !!userId;
+export default async function ShareLinkPage({ params }: Props) {
+  const { token } = await params;
 
-  // 1. Fetch family (no persons yet — need to determine viewer role first)
-  const family = await db.family.findFirst({
-    where: { slug, deletedAt: null },
+  // 1. Validate the share link
+  const link = await db.shareLink.findUnique({
+    where: { token },
+    select: {
+      id: true,
+      isActive: true,
+      expiresAt: true,
+      passwordHash: true,
+      targetType: true,
+      familyId: true,
+    },
+  });
+
+  if (!link || !link.isActive) notFound();
+
+  // Check expiry
+  if (link.expiresAt && link.expiresAt < new Date()) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground">
+          <AlertTriangle className="h-12 w-12 text-yellow-500" />
+          <p className="text-lg font-medium">انتهت صلاحية هذا الرابط</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Password check
+  if (link.passwordHash) {
+    const jar = await cookies();
+    const accessCookie = jar.get(`share_access_${token}`);
+    if (!accessCookie) {
+      return <SharePasswordForm token={token} />;
+    }
+  }
+
+  // 3. Only FAMILY target type is implemented for now
+  if (link.targetType !== "FAMILY" || !link.familyId) notFound();
+
+  // 4. Fetch family
+  const family = await db.family.findUnique({
+    where: { id: link.familyId, deletedAt: null },
     select: {
       id: true,
       name: true,
-      slug: true,
       isPublic: true,
       originSummary: true,
       _count: { select: { persons: true } },
     },
   });
 
-  if (!family || (!family.isPublic && !isLoggedIn)) notFound();
+  if (!family) notFound();
 
-  // 2. Determine viewer's access level for this specific family
+  // 5. Determine viewer's session — share link grants SHARED_LINK access
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+  const isSystemAdmin = session?.user?.accountType === "SYSTEM_ADMIN";
+  const isLoggedIn = !!userId;
+
   const isFamilyAdmin =
     isSystemAdmin ||
     (isLoggedIn &&
@@ -40,23 +82,21 @@ export default async function FamilyPublicPage({ params }: Props) {
         where: { familyId: family.id, userId: userId!, isActive: true },
       })));
 
-  // 3. Build visibility filter based on access level
-  //    PUBLIC      → everyone
-  //    MEMBER      → logged-in users (any role)
-  //    ADMIN       → family admin or system admin
-  //    SHARED_LINK → only via share link; treat as ADMIN for direct URL access
-  const allowedVisibilities = isFamilyAdmin
+  // Share link grants access to PUBLIC + SHARED_LINK; logged-in members also get MEMBER
+  const allowedVisibilities: string[] = isFamilyAdmin
     ? ["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]
     : isLoggedIn
-    ? ["PUBLIC", "MEMBER"]
-    : ["PUBLIC"];
+    ? ["PUBLIC", "MEMBER", "SHARED_LINK"]
+    : ["PUBLIC", "SHARED_LINK"];
 
-  // 4. Fetch persons with correct filter
+  // 6. Fetch visible persons
   const persons = await db.person.findMany({
     where: {
       familyId: family.id,
       deletedAt: null,
-      visibilityLevel: { in: allowedVisibilities as ("PUBLIC" | "MEMBER" | "ADMIN" | "SHARED_LINK")[] },
+      visibilityLevel: {
+        in: allowedVisibilities as ("PUBLIC" | "MEMBER" | "ADMIN" | "SHARED_LINK")[],
+      },
     },
     select: {
       id: true,
@@ -69,27 +109,14 @@ export default async function FamilyPublicPage({ params }: Props) {
     orderBy: { fullName: "asc" },
   });
 
-  if (!family.isPublic && !isFamilyAdmin) notFound();
-
-  // Get parent-child relations for visible persons
   const personIds = persons.map((p) => p.id);
-  const [relations, rawMarriages] = await Promise.all([
-    db.parentChildRelation.findMany({
-      where: {
-        parentPersonId: { in: personIds },
-        childPersonId: { in: personIds },
-      },
-      select: { parentPersonId: true, childPersonId: true },
-    }),
-    db.marriageRelation.findMany({
-      where: {
-        deletedAt: null,
-        personAId: { in: personIds },
-        personBId: { in: personIds },
-      },
-      select: { id: true, personAId: true, personBId: true },
-    }),
-  ]);
+  const relations = await db.parentChildRelation.findMany({
+    where: {
+      parentPersonId: { in: personIds },
+      childPersonId: { in: personIds },
+    },
+    select: { parentPersonId: true, childPersonId: true },
+  });
 
   const personsForTree = persons.map((p) => ({
     id: p.id,
@@ -105,12 +132,6 @@ export default async function FamilyPublicPage({ params }: Props) {
     childId: r.childPersonId,
   }));
 
-  const marriagesForTree = rawMarriages.map((m) => ({
-    id: m.id,
-    personAId: m.personAId,
-    personBId: m.personBId,
-  }));
-
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -124,7 +145,9 @@ export default async function FamilyPublicPage({ params }: Props) {
                 <TreePine className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">عائلة {family.name}</h1>
+                <h1 className="text-xl font-bold text-foreground">
+                  عائلة {family.name}
+                </h1>
                 {family.originSummary && (
                   <p className="text-sm text-muted-foreground mt-0.5 max-w-md line-clamp-1">
                     {family.originSummary}
@@ -138,7 +161,21 @@ export default async function FamilyPublicPage({ params }: Props) {
                 {family._count.persons} فرد
               </span>
               <Badge variant={family.isPublic ? "public" : "private"}>
-                {family.isPublic ? <><Globe className="h-3 w-3 ml-1" />عامة</> : <><Lock className="h-3 w-3 ml-1" />خاصة</>}
+                {family.isPublic ? (
+                  <>
+                    <Globe className="h-3 w-3 ml-1" />
+                    عامة
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-3 w-3 ml-1" />
+                    خاصة
+                  </>
+                )}
+              </Badge>
+              <Badge variant="outline" className="text-xs gap-1">
+                <Lock className="h-3 w-3" />
+                رابط مشاركة
               </Badge>
             </div>
           </div>
@@ -152,7 +189,7 @@ export default async function FamilyPublicPage({ params }: Props) {
               <p>لا يوجد أفراد مرئيون في هذه العائلة</p>
             </div>
           ) : (
-            <FamilyTree persons={personsForTree} relations={relationsForTree} marriages={marriagesForTree} />
+            <FamilyTree persons={personsForTree} relations={relationsForTree} />
           )}
         </div>
       </main>

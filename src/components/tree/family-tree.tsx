@@ -31,9 +31,16 @@ interface Relation {
   childId: string;
 }
 
+interface Marriage {
+  id: string;
+  personAId: string;
+  personBId: string;
+}
+
 interface Props {
   persons: PersonData[];
   relations: Relation[];
+  marriages?: Marriage[];
 }
 
 const nodeTypes = { person: PersonNode };
@@ -90,7 +97,7 @@ function buildLayout(persons: PersonData[], relations: Relation[]) {
   return positions;
 }
 
-export function FamilyTree({ persons, relations }: Props) {
+export function FamilyTree({ persons, relations, marriages = [] }: Props) {
   const positions = useMemo(() => buildLayout(persons, relations), [persons, relations]);
 
   const initialNodes: Node[] = useMemo(
@@ -104,17 +111,26 @@ export function FamilyTree({ persons, relations }: Props) {
     [persons, positions]
   );
 
-  const initialEdges: Edge[] = useMemo(
-    () =>
-      relations.map(({ parentId, childId }, i) => ({
-        id: `e-${i}`,
-        source: parentId,
-        target: childId,
-        type: "smoothstep",
-        style: { stroke: "hsl(145 35% 32%)", strokeWidth: 1.5, opacity: 0.7 },
-      })),
-    [relations]
-  );
+  const initialEdges: Edge[] = useMemo(() => {
+    const parentChildEdges: Edge[] = relations.map(({ parentId, childId }, i) => ({
+      id: `e-pc-${i}`,
+      source: parentId,
+      target: childId,
+      type: "smoothstep",
+      style: { stroke: "hsl(145 35% 32%)", strokeWidth: 1.5, opacity: 0.7 },
+    }));
+    const marriageEdges: Edge[] = marriages.map((m) => ({
+      id: `e-m-${m.id}`,
+      source: m.personAId,
+      target: m.personBId,
+      type: "straight",
+      style: { stroke: "hsl(350 70% 60%)", strokeWidth: 1.5, strokeDasharray: "5 4", opacity: 0.8 },
+      label: "♥",
+      labelStyle: { fill: "hsl(350 70% 60%)", fontSize: 10 },
+      labelBgStyle: { fill: "transparent" },
+    }));
+    return [...parentChildEdges, ...marriageEdges];
+  }, [relations, marriages]);
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);

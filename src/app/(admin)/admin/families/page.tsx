@@ -1,16 +1,20 @@
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TreePine, Users, Globe, Lock } from "lucide-react";
+import { TreePine, Users, Globe, Lock, Link2 } from "lucide-react";
 import {
   ToggleFamilyPublicButton,
   RemoveFamilyAdminButton,
   DeleteFamilyButton,
   RestoreFamilyButton,
 } from "@/components/admin/family-admin-actions";
+import {
+  ApproveFamilyLinkButton,
+  RejectFamilyLinkButton,
+} from "@/components/admin/family-link-actions";
 
 export default async function AdminFamiliesPage() {
-  const [activeFamilies, deletedFamilies] = await Promise.all([
+  const [activeFamilies, deletedFamilies, pendingLinks] = await Promise.all([
     db.family.findMany({
       where: { deletedAt: null },
       include: {
@@ -27,6 +31,14 @@ export default async function AdminFamiliesPage() {
       include: { _count: { select: { persons: true } } },
       orderBy: { deletedAt: "desc" },
       take: 20,
+    }),
+    db.familyLink.findMany({
+      where: { status: "PENDING", deletedAt: null },
+      include: {
+        familyA: { select: { id: true, name: true } },
+        familyB: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -126,6 +138,49 @@ export default async function AdminFamiliesPage() {
                     </p>
                   </div>
                   <RestoreFamilyButton familyId={family.id} />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Family Links */}
+      {pendingLinks.length > 0 && (
+        <Card>
+          <CardHeader className="pb-0">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base text-muted-foreground font-normal">
+                روابط عائلات معلقة ({pendingLinks.length})
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border/40">
+              {pendingLinks.map((link) => (
+                <li key={link.id} className="px-6 py-4 flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <p className="text-sm text-foreground">
+                      عائلة {link.familyA.name}
+                      <span className="mx-2 text-muted-foreground">←→</span>
+                      عائلة {link.familyB.name}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {link.linkType === "KINSHIP" ? "نسب" : "مصاهرة"}
+                      </Badge>
+                      {link.description && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {link.description}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ApproveFamilyLinkButton linkId={link.id} />
+                    <RejectFamilyLinkButton linkId={link.id} />
+                  </div>
                 </li>
               ))}
             </ul>

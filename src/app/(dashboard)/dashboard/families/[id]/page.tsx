@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FamilySettingsForm } from "@/components/families/family-settings-form";
 import { PersonsList } from "@/components/persons/persons-list";
+import ShareLinkManager from "@/components/families/share-link-manager";
+import FamilyLinkManager from "@/components/families/family-link-manager";
+import MarriageManager from "@/components/persons/marriage-manager";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -48,6 +51,67 @@ export default async function FamilyDetailPage({ params }: Props) {
 
   const isFamilyAdmin = isSystemAdmin || family.adminAssignments.some((a) => a.user.id === user.id);
   if (!isFamilyAdmin) notFound();
+
+  const shareLinks = await db.shareLink.findMany({
+    where: { familyId: id, isActive: true },
+    select: { id: true, token: true, passwordHash: true, expiresAt: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // FamilyLinks — both directions (A or B)
+  const rawLinks = await db.familyLink.findMany({
+    where: {
+      deletedAt: null,
+      status: { in: ["APPROVED", "PENDING"] },
+      OR: [{ familyAId: id }, { familyBId: id }],
+    },
+    include: {
+      familyA: { select: { id: true, name: true } },
+      familyB: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const familyLinks = rawLinks.map((l) => ({
+    linkId: l.id,
+    familyId: l.familyAId === id ? l.familyBId : l.familyAId,
+    familyName: l.familyAId === id ? l.familyB.name : l.familyA.name,
+    linkType: l.linkType as "KINSHIP" | "IN_LAW",
+    description: l.description,
+    status: l.status as "PENDING" | "APPROVED" | "REJECTED",
+  }));
+
+  // All other families for the proposal dropdown
+  const otherFamilies = await db.family.findMany({
+    where: { deletedAt: null, id: { not: id } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  // Marriages within this family
+  const personIds = family.persons.map((p) => p.id);
+  const rawMarriages = await db.marriageRelation.findMany({
+    where: {
+      deletedAt: null,
+      personAId: { in: personIds },
+    },
+    select: {
+      id: true,
+      personAId: true,
+      personBId: true,
+      marriageDate: true,
+    },
+  });
+
+  const personMap = new Map(family.persons.map((p) => [p.id, p.fullName]));
+  const marriages = rawMarriages.map((m) => ({
+    id: m.id,
+    personAId: m.personAId,
+    personBId: m.personBId,
+    personAName: personMap.get(m.personAId) ?? "؟",
+    personBName: personMap.get(m.personBId) ?? "؟",
+    marriageDate: m.marriageDate,
+  }));
 
   return (
     <div className="space-y-6">
@@ -119,6 +183,54 @@ export default async function FamilyDetailPage({ params }: Props) {
             </CardContent>
           </Card>
 
+          {/* Share Links */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">روابط المشاركة</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ShareLinkManager
+                familyId={id}
+                links={shareLinks.map((l) => ({
+                  id: l.id,
+                  token: l.token,
+                  hasPassword: !!l.passwordHash,
+                  expiresAt: l.expiresAt,
+                  createdAt: l.createdAt,
+                }))}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Family Links */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">ربط العائلات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FamilyLinkManager
+                currentFamilyId={id}
+                isSystemAdmin={isSystemAdmin}
+                links={familyLinks}
+                otherFamilies={otherFamilies}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Marriages */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">الزيجات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MarriageManager
+                familyId={id}
+                persons={family.persons.map((p) => ({ id: p.id, fullName: p.fullName }))}
+                marriages={marriages}
+              />
+            </CardContent>
+          </Card>
+
           {/* Admins */}
           <Card>
             <CardHeader className="pb-3">
@@ -128,9 +240,9 @@ export default async function FamilyDetailPage({ params }: Props) {
               {family.adminAssignments.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 text-sm">
                   <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-accent">
-                    {a.user.fullName[0]}
+                    {(a.user.fullName ?? a.user.email ?? "?")[0]}
                   </div>
-                  <span className="text-foreground">{a.user.fullName}</span>
+                  <span className="text-foreground">{a.user.fullName ?? a.user.email ?? "مستخدم"}</span>
                 </div>
               ))}
             </CardContent>

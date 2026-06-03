@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Trash2, User, UserX } from "lucide-react";
+import { Trash2, User, UserX, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { deletePerson } from "@/lib/actions/persons";
 import type { Gender, VisibilityLevel } from "@/generated/prisma/client";
@@ -84,14 +84,23 @@ export function PersonsList({ persons, familyId, canManage }: Props) {
               {visibilityLabels[person.visibilityLevel].label}
             </Badge>
             {canManage && (
-              <button
-                onClick={() => handleDelete(person.id)}
-                disabled={isPending}
-                className="p-1 text-muted-foreground hover:text-destructive transition-colors rounded"
-                title="حذف"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <>
+                <Link
+                  href={`/dashboard/families/${familyId}/persons/${person.id}/edit`}
+                  className="p-1 text-muted-foreground hover:text-accent transition-colors rounded"
+                  title="تعديل"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Link>
+                <button
+                  onClick={() => handleDelete(person.id)}
+                  disabled={isPending}
+                  className="p-1 text-muted-foreground hover:text-destructive transition-colors rounded"
+                  title="حذف"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </>
             )}
           </div>
         </li>

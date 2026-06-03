@@ -127,6 +127,66 @@ export async function addParentChildRelation(
   return { success: true };
 }
 
+const updatePersonSchema = z.object({
+  fullName: z.string().min(2).max(200),
+  gender: z.enum(["MALE", "FEMALE"]),
+  isLiving: z.boolean().default(true),
+  birthDate: z.string().optional(),
+  deathDate: z.string().optional(),
+  biography: z.string().max(2000).optional(),
+  notes: z.string().max(500).optional(),
+  visibilityLevel: z.enum(["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]).default("PUBLIC"),
+});
+
+export async function updatePerson(personId: string, rawData: unknown): Promise<PersonActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+
+  const person = await db.person.findUnique({ where: { id: personId } });
+  if (!person || person.deletedAt) return { success: false, error: "الشخص غير موجود" };
+
+  const parsed = updatePersonSchema.safeParse(rawData);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
+  }
+
+  const data = parsed.data;
+  const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+
+  if (!(await canManageFamily(session.user.id, person.familyId, isAdmin))) {
+    await db.editRequest.create({
+      data: {
+        requestType: "EDIT_PERSON",
+        targetType: "PERSON",
+        targetId: personId,
+        familyId: person.familyId,
+        submittedByUserId: session.user.id,
+        payloadJson: data,
+      },
+    });
+    revalidatePath("/dashboard/requests");
+    return { success: true, personId };
+  }
+
+  await db.person.update({
+    where: { id: personId },
+    data: {
+      fullName: data.fullName,
+      gender: data.gender,
+      isLiving: data.isLiving,
+      birthDate: data.birthDate ? new Date(data.birthDate) : null,
+      deathDate: data.deathDate ? new Date(data.deathDate) : null,
+      biography: data.biography ?? null,
+      notes: data.notes ?? null,
+      visibilityLevel: data.visibilityLevel,
+    },
+  });
+
+  revalidatePath(`/dashboard/families/${person.familyId}`);
+  revalidatePath(`/family/${person.familyId}`);
+  return { success: true, personId };
+}
+
 export async function deletePerson(personId: string): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
