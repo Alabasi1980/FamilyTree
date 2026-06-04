@@ -1,10 +1,10 @@
-[{ 
+[{
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
     "package_name": "com.teranoo.bustanalosool",
     "sha256_cert_fingerprints": [
-      "PLACEHOLDER"
+      "B2:E8:DC:BF:FB:01:0E:F1:CC:AD:C7:6E:9F:52:A3:63:7D:45:28:17:8C:91:A0:40:D4:DC:CD:36:77:4E:18:24"
     ]
   }
 }]

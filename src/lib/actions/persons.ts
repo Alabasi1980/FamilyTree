@@ -127,7 +127,7 @@ async function validateParentSlot(parentId: string, childId: string) {
     where: { id: parentId },
     select: { gender: true },
   });
-  if (!parent) return "ط§ظ„ظˆط§ظ„ط¯ ط؛ظٹط± ظ…ظˆط¬ظˆط¯";
+  if (!parent) return "الوالد غير موجود";
 
   const existingParents = await db.parentChildRelation.findMany({
     where: {
@@ -139,9 +139,9 @@ async function validateParentSlot(parentId: string, childId: string) {
     },
   });
 
-  if (existingParents.length >= 2) return "ظ„ط§ ظٹظ…ظƒظ† طھط³ط¬ظٹظ„ ط£ظƒط«ط± ظ…ظ† ظˆط§ظ„ط¯ظٹظ† ظپظٹ ط§ظ„ظ†ظ…ظˆط°ط¬ ط§ظ„ط­ط§ظ„ظٹ";
+  if (existingParents.length >= 2) return "لا يمكن تسجيل أكثر من والدين في النموذج الحالي";
   if (existingParents.some((row) => row.parent.gender === parent.gender)) {
-    return "ظٹظˆط¬ط¯ ظˆط§ظ„ط¯/ظˆط§ظ„ط¯ط© ظ…ظ† ظ†ظپط³ ط§ظ„ط¬ظ†ط³ ظ…ط³ط¬ظ„ ظ„ظ‡ط°ط§ ط§ظ„ط´ط®طµ";
+    return "يوجد والد/والدة من نفس الجنس مسجل لهذا الشخص";
   }
 
   return null;
@@ -165,11 +165,11 @@ async function validateNewParentSlot(childId: string, gender: "MALE" | "FEMALE")
 
 export async function createPerson(rawData: unknown): Promise<PersonActionResult> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const parsed = personSchema.safeParse(rawData);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "ط¨ظٹط§ظ†ط§طھ ط؛ظٹط± طµط­ظٹط­ط©" };
+    return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
   }
 
   const data = parsed.data;
@@ -220,11 +220,11 @@ export async function addParentChildRelation(
   childId: string
 ): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const child = await db.person.findUnique({ where: { id: childId } });
   const parent = await db.person.findUnique({ where: { id: parentId } });
-  if (!child) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!child) return { success: false, error: "الشخص غير موجود" };
 
   if (!parent || parent.deletedAt || child.deletedAt) {
     return { success: false, error: "الشخص غير موجود" };
@@ -242,7 +242,7 @@ export async function addParentChildRelation(
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
-    return { success: false, error: "ظ„ط§ طھظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط§ظ„طھط¹ط¯ظٹظ„" };
+    return { success: false, error: "لا تملك صلاحية التعديل" };
   }
 
   // Create parent-child relation
@@ -271,14 +271,14 @@ const updatePersonSchema = z.object({
 
 export async function updatePerson(personId: string, rawData: unknown): Promise<PersonActionResult> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const person = await db.person.findUnique({ where: { id: personId } });
-  if (!person || person.deletedAt) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!person || person.deletedAt) return { success: false, error: "الشخص غير موجود" };
 
   const parsed = updatePersonSchema.safeParse(rawData);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "ط¨ظٹط§ظ†ط§طھ ط؛ظٹط± طµط­ظٹط­ط©" };
+    return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
   }
 
   const data = parsed.data;
@@ -320,14 +320,14 @@ export async function updatePerson(personId: string, rawData: unknown): Promise<
 
 export async function deletePerson(personId: string): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const person = await db.person.findUnique({ where: { id: personId } });
-  if (!person) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!person) return { success: false, error: "الشخص غير موجود" };
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   if (!(await canManageFamily(session.user.id, person.familyId, isAdmin))) {
-    return { success: false, error: "ظ„ط§ طھظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط§ظ„ط­ط°ظپ" };
+    return { success: false, error: "لا تملك صلاحية الحذف" };
   }
 
   await db.person.update({ where: { id: personId }, data: { deletedAt: new Date() } });
@@ -342,15 +342,15 @@ export async function createPersonAsChildOf(
   newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
 ): Promise<PersonActionResult> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
-  if (!newPersonData.fullName?.trim()) return { success: false, error: "ط§ظ„ط§ط³ظ… ظ…ط·ظ„ظˆط¨" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
 
   const parent = await db.person.findUnique({ where: { id: parentPersonId } });
-  if (!parent || parent.deletedAt) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!parent || parent.deletedAt) return { success: false, error: "الشخص غير موجود" };
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   if (!(await canManageFamily(session.user.id, parent.familyId, isAdmin))) {
-    return { success: false, error: "ظ„ط§ طھظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط§ظ„ط¥ط¶ط§ظپط©" };
+    return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
   const child = await db.person.create({
@@ -379,15 +379,15 @@ export async function createPersonAsParentOf(
   newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
 ): Promise<PersonActionResult> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
-  if (!newPersonData.fullName?.trim()) return { success: false, error: "ط§ظ„ط§ط³ظ… ظ…ط·ظ„ظˆط¨" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
 
   const child = await db.person.findUnique({ where: { id: childPersonId } });
-  if (!child || child.deletedAt) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!child || child.deletedAt) return { success: false, error: "الشخص غير موجود" };
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
-    return { success: false, error: "ظ„ط§ طھظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط§ظ„ط¥ط¶ط§ظپط©" };
+    return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
   const parentSlotError = await validateNewParentSlot(childPersonId, newPersonData.gender);
@@ -419,11 +419,11 @@ export async function removeParentChildRelation(
   childId: string
 ): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
-  if (!session?.user) return { success: false, error: "ط؛ظٹط± ظ…طµط±ط­" };
+  if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const child = await db.person.findUnique({ where: { id: childId } });
   const parent = await db.person.findUnique({ where: { id: parentId } });
-  if (!child) return { success: false, error: "ط§ظ„ط´ط®طµ ط؛ظٹط± ظ…ظˆط¬ظˆط¯" };
+  if (!child) return { success: false, error: "الشخص غير موجود" };
 
   if (!parent || parent.deletedAt || child.deletedAt) {
     return { success: false, error: "الشخص غير موجود" };
@@ -434,7 +434,7 @@ export async function removeParentChildRelation(
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
-    return { success: false, error: "ظ„ط§ طھظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط§ظ„طھط¹ط¯ظٹظ„" };
+    return { success: false, error: "لا تملك صلاحية التعديل" };
   }
 
   await db.parentChildRelation.deleteMany({
