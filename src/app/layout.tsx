@@ -18,6 +18,13 @@ export const metadata: Metadata = {
   description: "منصة لتسجيل وعرض أشجار العائلات وربطها ببعضها",
   keywords: ["شجرة العائلة", "نسب", "عائلة", "أنساب"],
   manifest: withBasePath("/manifest.webmanifest"),
+  icons: {
+    icon: [
+      { url: withBasePath("/icons/icon-192x192.png"), sizes: "192x192", type: "image/png" },
+      { url: withBasePath("/icons/icon-512x512.png"), sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: withBasePath("/icons/icon-192x192.png"), sizes: "192x192", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
