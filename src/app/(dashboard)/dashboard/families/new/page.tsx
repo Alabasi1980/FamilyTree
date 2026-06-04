@@ -7,6 +7,7 @@ import { ArrowRight, Loader2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createFamilyRequest } from "@/lib/actions/families";
+import { withBasePath } from "@/lib/base-path";
 
 export default function NewFamilyPage() {
   const router = useRouter();
@@ -31,9 +32,9 @@ export default function NewFamilyPage() {
       }
 
       if (result.familyId) {
-        router.push(`/dashboard/families/${result.familyId}`);
+        router.push(withBasePath(`/dashboard/families/${result.familyId}`));
       } else {
-        router.push("/dashboard/requests");
+        router.push(withBasePath("/dashboard/requests"));
       }
     });
   }

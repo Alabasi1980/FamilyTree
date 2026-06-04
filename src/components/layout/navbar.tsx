@@ -12,7 +12,7 @@ export async function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <TreePine className="h-5 w-5 text-accent group-hover:text-accent/80 transition-colors" />
-          <span className="font-semibold text-foreground">حديقة العائلات</span>
+          <span className="font-semibold text-foreground">بستان الأصول</span>
         </Link>
 
         {/* Search */}

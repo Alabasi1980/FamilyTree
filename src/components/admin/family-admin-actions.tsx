@@ -21,7 +21,7 @@ export function ToggleFamilyPublicButton({
   const [pending, startTransition] = useTransition();
   return (
     <button
-      onClick={() => startTransition(() => toggleFamilyPublic(familyId))}
+      onClick={() => startTransition(async () => { await toggleFamilyPublic(familyId); })}
       disabled={pending}
       title={isPublic ? "تحويل لخاصة" : "تحويل لعامة"}
       className="flex items-center gap-1 text-xs text-accent hover:underline disabled:opacity-50"
@@ -44,7 +44,7 @@ export function RemoveFamilyAdminButton({ assignmentId }: { assignmentId: string
   const [pending, startTransition] = useTransition();
   return (
     <button
-      onClick={() => startTransition(() => removeFamilyAdmin(assignmentId))}
+      onClick={() => startTransition(async () => { await removeFamilyAdmin(assignmentId); })}
       disabled={pending}
       title="إزالة المسؤول"
       className="text-red-400 hover:text-red-300 disabled:opacity-50"
@@ -75,7 +75,7 @@ export function DeleteFamilyButton({ familyId }: { familyId: string }) {
   return (
     <span className="flex items-center gap-1">
       <button
-        onClick={() => startTransition(() => deleteFamily(familyId))}
+        onClick={() => startTransition(async () => { await deleteFamily(familyId); })}
         disabled={pending}
         className="text-xs text-red-400 font-semibold hover:underline disabled:opacity-50"
       >
@@ -92,7 +92,7 @@ export function RestoreFamilyButton({ familyId }: { familyId: string }) {
   const [pending, startTransition] = useTransition();
   return (
     <button
-      onClick={() => startTransition(() => restoreFamily(familyId))}
+      onClick={() => startTransition(async () => { await restoreFamily(familyId); })}
       disabled={pending}
       className="text-xs text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
     >

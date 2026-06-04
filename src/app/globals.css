@@ -149,3 +149,8 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+
+.tree-viewport {
+  height: calc(100vh - 130px);
+  touch-action: none;
+}

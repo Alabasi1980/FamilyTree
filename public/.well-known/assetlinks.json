@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.PLACEHOLDER.familiestree",
+    "sha256_cert_fingerprints": [
+      "PASTE_SHA256_FINGERPRINT_HERE_AFTER_BUBBLEWRAP_BUILD"
+    ]
+  }
+}]

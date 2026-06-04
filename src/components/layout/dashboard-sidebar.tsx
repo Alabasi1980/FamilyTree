@@ -13,6 +13,7 @@ import {
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/base-path";
 import type { AccountType } from "@/generated/prisma/client";
 
 interface SidebarUser {
@@ -46,7 +47,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
       <div className="p-4 border-b border-border/40">
         <Link href="/" className="flex items-center gap-2 group">
           <TreePine className="h-5 w-5 text-accent" />
-          <span className="font-semibold text-sm text-foreground">حديقة العائلات</span>
+          <span className="font-semibold text-sm text-foreground">بستان الأصول</span>
         </Link>
       </div>
 
@@ -109,7 +110,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
           الإعدادات
         </Link>
         <button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => signOut({ callbackUrl: withBasePath("/") })}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
         >
           <LogOut className="h-4 w-4" />

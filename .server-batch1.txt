@@ -1,0 +1,98 @@
+﻿cd /var/www/bustanalosool/repo
+python3 - <<'"'"'PY'"'"'
+from pathlib import Path
+
+files = {
+    'src/lib/base-path.ts': '''export function normalizeBasePath(value?: string | null) {
+  if (!value) return "";
+
+  let normalized = value.trim();
+  if (!normalized || normalized === "/") return "";
+
+  if (!normalized.startsWith("/")) {
+    normalized = `/${normalized}`;
+  }
+
+  normalized = normalized.replace(/\/+$/, "");
+  return normalized === "/" ? "" : normalized;
+}
+
+export const appBasePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
+
+export const appBasePathScope = appBasePath ? `${appBasePath}/` : "/";
+
+export function withBasePath(path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (normalizedPath === "/") {
+    return appBasePath || "/";
+  }
+
+  return `${appBasePath}${normalizedPath}`;
+}
+''',
+    'next.config.ts': '''import type { NextConfig } from "next";
+import { appBasePath } from "./src/lib/base-path";
+
+const nextConfig: NextConfig = {
+  ...(appBasePath ? { basePath: appBasePath } : {}),
+};
+
+export default nextConfig;
+''',
+    'src/app/layout.tsx': '''import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import "./globals.css";
+import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/base-path";
+import { PWARegister } from "@/components/pwa-register";
+
+const ibmPlexArabic = IBM_Plex_Sans_Arabic({
+  weight: ["300", "400", "500", "600", "700"],
+  subsets: ["arabic"],
+  variable: "--font-arabic",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "حديقة العائلات",
+  description: "منصة لتسجيل وعرض أشجار العائلات وربطها ببعضها",
+  keywords: ["شجرة العائلة", "نسب", "عائلة", "أنساب"],
+  manifest: withBasePath("/manifest.webmanifest"),
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f1a14",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="ar"
+      dir="rtl"
+      className={cn(ibmPlexArabic.variable, "h-full")}
+    >
+      <body className="min-h-full flex flex-col antialiased">
+        {children}
+        <PWARegister />
+      </body>
+    </html>
+  );
+}
+''',
+}
+
+for rel_path, content in files.items():
+    path = Path(rel_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding='utf-8')
+
+print('batch1 ok')
+PY

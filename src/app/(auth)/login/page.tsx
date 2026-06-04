@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { TreePine, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { withBasePath } from "@/lib/base-path";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("البريد الإلكتروني أو كلمة المرور غير صحيحة");
       } else {
-        router.push("/dashboard");
+        router.push(withBasePath("/dashboard"));
         router.refresh();
       }
     });
@@ -111,7 +112,7 @@ export default function LoginPage() {
           type="button"
           variant="outline"
           className="w-full gap-2"
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          onClick={() => signIn("google", { callbackUrl: withBasePath("/dashboard") })}
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

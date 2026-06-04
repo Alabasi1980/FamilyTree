@@ -77,7 +77,7 @@ export default function HomePage() {
             <TreePine className="h-8 w-8 text-accent" />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            حديقة العائلات
+            بستان الأصول
           </h1>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
             اكتشف تاريخ العائلات، تتبع الأنساب، وابنِ شجرة عائلتك بطريقة بصرية سهلة
@@ -109,7 +109,7 @@ export default function HomePage() {
       </main>
 
       <footer className="border-t border-border/40 py-6 text-center text-sm text-muted-foreground">
-        حديقة العائلات — حفظ التاريخ العائلي للأجيال القادمة
+        بستان الأصول — حفظ التاريخ العائلي للأجيال القادمة
       </footer>
     </div>
   );

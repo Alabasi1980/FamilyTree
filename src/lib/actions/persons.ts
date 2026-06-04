@@ -201,5 +201,137 @@ export async function deletePerson(personId: string): Promise<{ success: boolean
 
   await db.person.update({ where: { id: personId }, data: { deletedAt: new Date() } });
   revalidatePath(`/dashboard/families/${person.familyId}`);
+  revalidatePath(`/family/${person.familyId}`);
+  return { success: true };
+}
+
+export async function createPersonAsChildOf(
+  parentPersonId: string,
+  newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
+): Promise<PersonActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+
+  const parent = await db.person.findUnique({ where: { id: parentPersonId } });
+  if (!parent || parent.deletedAt) return { success: false, error: "الشخص غير موجود" };
+
+  const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+  if (!(await canManageFamily(session.user.id, parent.familyId, isAdmin))) {
+    return { success: false, error: "لا تملك صلاحية الإضافة" };
+  }
+
+  const child = await db.person.create({
+    data: {
+      familyId: parent.familyId,
+      fullName: newPersonData.fullName.trim(),
+      gender: newPersonData.gender,
+      isLiving: true,
+      visibilityLevel: "PUBLIC",
+    },
+  });
+
+  await db.personAncestry.create({
+    data: { ancestorId: child.id, descendantId: child.id, depth: 0 },
+  });
+
+  await db.parentChildRelation.create({
+    data: { parentPersonId, childPersonId: child.id },
+  });
+
+  const parentAncestors = await db.personAncestry.findMany({ where: { descendantId: parentPersonId } });
+  if (parentAncestors.length > 0) {
+    await db.personAncestry.createMany({
+      data: parentAncestors.map((pa) => ({
+        ancestorId: pa.ancestorId,
+        descendantId: child.id,
+        depth: pa.depth + 1,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  revalidatePath(`/dashboard/families/${parent.familyId}`);
+  revalidatePath(`/family/${parent.familyId}`);
+  return { success: true, personId: child.id };
+}
+
+export async function createPersonAsParentOf(
+  childPersonId: string,
+  newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
+): Promise<PersonActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+
+  const child = await db.person.findUnique({ where: { id: childPersonId } });
+  if (!child || child.deletedAt) return { success: false, error: "الشخص غير موجود" };
+
+  const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+  if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
+    return { success: false, error: "لا تملك صلاحية الإضافة" };
+  }
+
+  const parent = await db.person.create({
+    data: {
+      familyId: child.familyId,
+      fullName: newPersonData.fullName.trim(),
+      gender: newPersonData.gender,
+      isLiving: false,
+      visibilityLevel: "PUBLIC",
+    },
+  });
+
+  await db.personAncestry.create({
+    data: { ancestorId: parent.id, descendantId: parent.id, depth: 0 },
+  });
+
+  await db.parentChildRelation.create({
+    data: { parentPersonId: parent.id, childPersonId },
+  });
+
+  const childDescendants = await db.personAncestry.findMany({ where: { ancestorId: childPersonId } });
+  if (childDescendants.length > 0) {
+    await db.personAncestry.createMany({
+      data: childDescendants.map((cd) => ({
+        ancestorId: parent.id,
+        descendantId: cd.descendantId,
+        depth: cd.depth + 1,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  revalidatePath(`/dashboard/families/${child.familyId}`);
+  revalidatePath(`/family/${child.familyId}`);
+  return { success: true, personId: parent.id };
+}
+
+export async function removeParentChildRelation(
+  parentId: string,
+  childId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+
+  const child = await db.person.findUnique({ where: { id: childId } });
+  if (!child) return { success: false, error: "الشخص غير موجود" };
+
+  const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+  if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
+    return { success: false, error: "لا تملك صلاحية التعديل" };
+  }
+
+  await db.parentChildRelation.deleteMany({
+    where: { parentPersonId: parentId, childPersonId: childId },
+  });
+
+  // Remove the direct ancestry entry
+  await db.personAncestry.deleteMany({
+    where: { ancestorId: parentId, descendantId: childId },
+  });
+
+  revalidatePath(`/dashboard/families/${child.familyId}`);
+  revalidatePath(`/family/${child.familyId}`);
   return { success: true };
 }

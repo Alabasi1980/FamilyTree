@@ -301,6 +301,7 @@ model MarriageRelation {
   personAId    String
   personBId    String
   marriageDate DateTime?
+  divorceDate  DateTime?
   status       MarriageStatus @default(ACTIVE)
   notes        String?
   createdAt    DateTime       @default(now())

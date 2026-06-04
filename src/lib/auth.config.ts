@@ -1,16 +1,23 @@
 import type { NextAuthConfig } from "next-auth";
+import { appBasePath, withBasePath } from "@/lib/base-path";
+
+function stripBasePath(pathname: string) {
+  if (!appBasePath) return pathname;
+  if (pathname === appBasePath) return "/";
+  return pathname.startsWith(`${appBasePath}/`) ? pathname.slice(appBasePath.length) : pathname;
+}
 
 // Lightweight config used in proxy.ts (Edge-compatible, no DB imports)
 export const authConfig: NextAuthConfig = {
   pages: {
-    signIn: "/login",
-    error: "/login",
+    signIn: withBasePath("/login"),
+    error: withBasePath("/login"),
   },
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isSystemAdmin = auth?.user?.accountType === "SYSTEM_ADMIN";
-      const { pathname } = nextUrl;
+      const pathname = stripBasePath(nextUrl.pathname);
 
       if (pathname.startsWith("/admin")) {
         return isSystemAdmin;

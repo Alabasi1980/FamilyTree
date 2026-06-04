@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ProfileForm } from "@/components/profile/profile-form";
 import { Settings, User } from "lucide-react";
+import { withBasePath } from "@/lib/base-path";
 
 export default async function SettingsPage() {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect(withBasePath("/login"));
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
     },
   });
 
-  if (!user) redirect("/login");
+  if (!user) redirect(withBasePath("/login"));
 
   const displayName = user.fullName ?? user.name ?? "";
   const roleLabel = {

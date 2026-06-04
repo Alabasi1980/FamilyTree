@@ -105,7 +105,9 @@ export default function ShareLinkManager({
             /share/{link.token.slice(0, 12)}…
           </span>
           {link.hasPassword && (
-            <Lock className="h-3.5 w-3.5 text-yellow-500" title="محمي بكلمة مرور" />
+            <span title="محمي بكلمة مرور">
+              <Lock className="h-3.5 w-3.5 text-yellow-500" />
+            </span>
           )}
           <span className="text-muted-foreground text-xs mr-auto">
             {formatExpiry(link.expiresAt)}

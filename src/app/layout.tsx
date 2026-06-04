@@ -1,7 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/base-path";
+import { AuthClientProvider } from "@/components/auth/auth-client-provider";
+import { PWARegister } from "@/components/pwa-register";
 
 const ibmPlexArabic = IBM_Plex_Sans_Arabic({
   weight: ["300", "400", "500", "600", "700"],
@@ -11,9 +14,14 @@ const ibmPlexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "حديقة العائلات",
+  title: "بستان الأصول",
   description: "منصة لتسجيل وعرض أشجار العائلات وربطها ببعضها",
   keywords: ["شجرة العائلة", "نسب", "عائلة", "أنساب"],
+  manifest: withBasePath("/manifest.webmanifest"),
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f1a14",
 };
 
 export default function RootLayout({
@@ -27,7 +35,12 @@ export default function RootLayout({
       dir="rtl"
       className={cn(ibmPlexArabic.variable, "h-full")}
     >
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">
+        <AuthClientProvider>
+          {children}
+          <PWARegister />
+        </AuthClientProvider>
+      </body>
     </html>
   );
 }

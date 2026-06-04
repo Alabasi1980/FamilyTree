@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { updatePerson } from "@/lib/actions/persons";
+import { withBasePath } from "@/lib/base-path";
 import type { Gender, VisibilityLevel } from "@/generated/prisma/client";
 
 interface PersonData {
@@ -58,7 +59,7 @@ export default function EditPersonForm({ person, familyId }: Props) {
         return;
       }
 
-      router.push(`/dashboard/families/${familyId}`);
+      router.push(withBasePath(`/dashboard/families/${familyId}`));
     });
   }
 

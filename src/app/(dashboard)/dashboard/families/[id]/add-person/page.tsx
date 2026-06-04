@@ -7,6 +7,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createPerson } from "@/lib/actions/persons";
+import { withBasePath } from "@/lib/base-path";
 
 export default function AddPersonPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function AddPersonPage() {
         return;
       }
 
-      router.push(`/dashboard/families/${familyId}`);
+      router.push(withBasePath(`/dashboard/families/${familyId}`));
     });
   }
 

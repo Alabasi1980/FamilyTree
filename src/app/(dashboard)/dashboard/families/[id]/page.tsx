@@ -28,7 +28,7 @@ export default async function FamilyDetailPage({ params }: Props) {
       _count: { select: { persons: true } },
       adminAssignments: {
         where: { isActive: true },
-        include: { user: { select: { id: true, fullName: true } } },
+        include: { user: { select: { id: true, fullName: true, email: true } } },
       },
       persons: {
         where: { deletedAt: null },
@@ -88,22 +88,44 @@ export default async function FamilyDetailPage({ params }: Props) {
     orderBy: { name: "asc" },
   });
 
-  // Marriages within this family
   const personIds = family.persons.map((p) => p.id);
+
+  // IN_LAW linked families → fetch their persons so they can be added as spouses
+  const inLawLinks = familyLinks.filter((l) => l.linkType === "IN_LAW" && l.status === "APPROVED");
+  const inLawFamilyIds = inLawLinks.map((l) => l.familyId);
+
+  const linkedPersons = inLawFamilyIds.length > 0
+    ? await db.person.findMany({
+        where: { familyId: { in: inLawFamilyIds }, deletedAt: null },
+        select: { id: true, fullName: true, familyId: true },
+        orderBy: { fullName: "asc" },
+      })
+    : [];
+
+  // Marriages: any marriage where at least one person is from this family
   const rawMarriages = await db.marriageRelation.findMany({
     where: {
       deletedAt: null,
-      personAId: { in: personIds },
+      OR: [
+        { personAId: { in: personIds } },
+        { personBId: { in: personIds } },
+      ],
     },
     select: {
       id: true,
       personAId: true,
       personBId: true,
       marriageDate: true,
+      status: true,
+      divorceDate: true,
     },
   });
 
-  const personMap = new Map(family.persons.map((p) => [p.id, p.fullName]));
+  // Combined name map: current family + linked persons
+  const personMap = new Map<string, string>([
+    ...family.persons.map((p) => [p.id, p.fullName] as [string, string]),
+    ...linkedPersons.map((p) => [p.id, p.fullName] as [string, string]),
+  ]);
   const marriages = rawMarriages.map((m) => ({
     id: m.id,
     personAId: m.personAId,
@@ -111,6 +133,15 @@ export default async function FamilyDetailPage({ params }: Props) {
     personAName: personMap.get(m.personAId) ?? "؟",
     personBName: personMap.get(m.personBId) ?? "؟",
     marriageDate: m.marriageDate,
+    status: m.status,
+    divorceDate: m.divorceDate,
+  }));
+
+  // Build linkedPersonsForMarriage with family name for the dropdown
+  const linkedPersonsForManager = linkedPersons.map((p) => ({
+    id: p.id,
+    fullName: p.fullName,
+    familyName: inLawLinks.find((l) => l.familyId === p.familyId)?.familyName ?? "",
   }));
 
   return (
@@ -226,6 +257,7 @@ export default async function FamilyDetailPage({ params }: Props) {
               <MarriageManager
                 familyId={id}
                 persons={family.persons.map((p) => ({ id: p.id, fullName: p.fullName }))}
+                linkedPersons={linkedPersonsForManager}
                 marriages={marriages}
               />
             </CardContent>

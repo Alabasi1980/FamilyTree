@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
+import { withBasePath } from "@/lib/base-path";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Create a share link for a family
@@ -117,9 +118,9 @@ export async function verifyShareLinkPassword(
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: `/share/${token}`,
+    path: withBasePath(`/share/${token}`),
     maxAge: 86_400, // 24 hours
   });
 
-  redirect(`/share/${token}`);
+  redirect(withBasePath(`/share/${token}`));
 }
