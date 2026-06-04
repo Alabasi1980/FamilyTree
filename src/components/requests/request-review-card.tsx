@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X, Loader2 } from "lucide-react";
 import { reviewRequest } from "@/lib/actions/requests";
 
@@ -10,11 +11,19 @@ interface Props {
 }
 
 export function RequestReviewCard({ requestId, type }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
 
   function handle(approve: boolean) {
+    setError("");
     startTransition(async () => {
-      await reviewRequest(requestId, type, approve);
+      const result = await reviewRequest(requestId, type, approve);
+      if (!result.success) {
+        setError(result.error ?? "تعذر تنفيذ الطلب");
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -23,21 +32,24 @@ export function RequestReviewCard({ requestId, type }: Props) {
   }
 
   return (
-    <div className="flex gap-1">
-      <button
-        onClick={() => handle(true)}
-        className="p-1.5 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 transition-colors"
-        title="قبول"
-      >
-        <Check className="h-3.5 w-3.5" />
-      </button>
-      <button
-        onClick={() => handle(false)}
-        className="p-1.5 rounded bg-red-900/30 text-red-400 hover:bg-red-900/50 transition-colors"
-        title="رفض"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex gap-1">
+        <button
+          onClick={() => handle(true)}
+          className="rounded bg-green-900/30 p-1.5 text-green-400 transition-colors hover:bg-green-900/50"
+          title="قبول"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => handle(false)}
+          className="rounded bg-red-900/30 p-1.5 text-red-400 transition-colors hover:bg-red-900/50"
+          title="رفض"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {error && <p className="max-w-48 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

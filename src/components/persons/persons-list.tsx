@@ -65,7 +65,12 @@ export function PersonsList({ persons, familyId, canManage }: Props) {
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{person.fullName}</p>
+              <Link
+                href={`/dashboard/families/${familyId}/persons/${person.id}`}
+                className="block truncate text-sm font-medium text-foreground hover:text-accent"
+              >
+                {person.fullName}
+              </Link>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-xs text-muted-foreground">
                   {person.gender === "MALE" ? "ذكر" : "أنثى"}

@@ -40,6 +40,8 @@ interface Props {
 }
 
 const nodeTypes = { person: PersonNode };
+const closePersonDetailsLabel =
+  "\u0625\u063a\u0644\u0627\u0642 \u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0634\u062e\u0635";
 
 // ─── Generation-aware layout ──────────────────────────────────────────────────
 
@@ -271,9 +273,19 @@ export function FamilyTree({
 
   return (
     <div className="w-full h-full flex">
+      {selectedPerson && (
+        <button
+          type="button"
+          aria-label={closePersonDetailsLabel}
+          className="fixed inset-0 z-40 bg-black/45 md:hidden"
+          onClick={() => setSelectedPerson(null)}
+        />
+      )}
+
       {/* ── Sidebar ── */}
       {selectedPerson && (
         <PersonSidebar
+          key={selectedPerson.id}
           person={selectedPerson}
           allPersons={persons}
           linkedPersons={linkedPersons}
@@ -312,7 +324,7 @@ export function FamilyTree({
             color="hsl(150 12% 22%)"
           />
           <Controls
-            className="!bg-card/80 !border-border/60 !rounded-lg"
+            className="!hidden md:!block !bg-card/80 !border-border/60 !rounded-lg"
             showInteractive={false}
           />
           <MiniMap
@@ -355,4 +367,3 @@ export function FamilyTree({
     </div>
   );
 }
-

@@ -7,13 +7,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { withBasePath } from "@/lib/base-path";
+import { randomBytes } from "crypto";
+import { getShareAccessCookieName, signShareAccessToken } from "@/lib/share-access";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Create a share link for a family
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ShareLinkResult =
-  | { success: true; token: string }
+  | { success: true; id: string; token: string }
   | { success: false; error: string };
 
 export async function createShareLink(
@@ -47,6 +49,7 @@ export async function createShareLink(
     data: {
       targetType: "FAMILY",
       familyId,
+      token: randomBytes(32).toString("base64url"),
       passwordHash,
       expiresAt,
       createdByUserId: session.user.id,
@@ -54,7 +57,7 @@ export async function createShareLink(
   });
 
   revalidatePath(`/dashboard/families/${familyId}`);
-  return { success: true, token: link.token };
+  return { success: true, id: link.id, token: link.token };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +117,7 @@ export async function verifyShareLinkPassword(
 
   // Set a short-lived access cookie (1 day)
   const jar = await cookies();
-  jar.set(`share_access_${token}`, "1", {
+  jar.set(getShareAccessCookieName(token), signShareAccessToken(token), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

@@ -32,7 +32,7 @@ interface Props {
   lockedPersonA?: PersonOption;
 }
 
-export default function MarriageManager({ familyId, persons, linkedPersons = [], marriages, lockedPersonA }: Props) {
+export default function MarriageManager({ persons, linkedPersons = [], marriages, lockedPersonA }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");

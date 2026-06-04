@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useState } from "react";
 import {
   TreePine,
   LayoutDashboard,
@@ -11,6 +12,8 @@ import {
   Settings,
   LogOut,
   Shield,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { withBasePath } from "@/lib/base-path";
@@ -37,18 +40,52 @@ const adminNavItems = [
 
 export function DashboardSidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
 
   return (
-    <aside className="w-56 border-l border-border/40 bg-card/30 flex flex-col h-screen sticky top-0">
+    <>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="fixed right-3 top-3 z-40 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-card/95 text-foreground shadow-lg shadow-black/20 backdrop-blur md:hidden"
+        aria-label="فتح القائمة"
+        aria-expanded={isOpen}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {isOpen && (
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm md:hidden"
+          aria-label="إغلاق القائمة"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex h-dvh w-72 flex-col border-l border-border/40 bg-card shadow-2xl shadow-black/30 transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-56 md:translate-x-0 md:bg-card/30 md:shadow-none",
+          isOpen ? "translate-x-0" : "translate-x-full"
+        )}
+      >
       {/* Logo */}
-      <div className="p-4 border-b border-border/40">
-        <Link href="/" className="flex items-center gap-2 group">
+      <div className="flex items-center justify-between gap-3 p-4 border-b border-border/40">
+        <Link href="/" onClick={() => setIsOpen(false)} className="flex items-center gap-2 group">
           <TreePine className="h-5 w-5 text-accent" />
           <span className="font-semibold text-sm text-foreground">بستان الأصول</span>
         </Link>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground md:hidden"
+          aria-label="إغلاق القائمة"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {/* User info */}
@@ -64,6 +101,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={() => setIsOpen(false)}
             className={cn(
               "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
               isActive(item.href, item.exact)
@@ -85,6 +123,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setIsOpen(false)}
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                   isActive(item.href, item.exact)
@@ -104,6 +143,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
       <div className="p-3 border-t border-border/40 space-y-1">
         <Link
           href="/dashboard/settings"
+          onClick={() => setIsOpen(false)}
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
         >
           <Settings className="h-4 w-4" />
@@ -117,6 +157,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
           خروج
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

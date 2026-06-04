@@ -4,10 +4,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, TreePine, Users, Globe, Lock, ChevronLeft } from "lucide-react";
-import { JoinAdminRequestButton } from "@/components/families/join-admin-request-button";
-
-
-
 export default async function FamiliesListPage() {
   const session = await auth();
   const user = session!.user;

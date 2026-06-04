@@ -1,7 +1,21 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Search, TreePine, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
+import { withBasePath } from "@/lib/base-path";
+import { PublicSearchForm } from "@/components/search/public-search-form";
+
+const brandIcon = withBasePath("/icons/icon-192x192.png");
+
+const labels = {
+  brand: "\u0628\u0633\u062a\u0627\u0646 \u0627\u0644\u0623\u0635\u0648\u0644",
+  dashboard: "\u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645",
+  admin: "\u0627\u0644\u0625\u062f\u0627\u0631\u0629",
+  logout: "\u062e\u0631\u0648\u062c",
+  login: "\u062f\u062e\u0648\u0644",
+  register: "\u062a\u0633\u062c\u064a\u0644",
+  menu: "\u0627\u0644\u0642\u0627\u0626\u0645\u0629",
+};
 
 export async function Navbar() {
   const session = await auth();
@@ -9,51 +23,45 @@ export async function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
-          <TreePine className="h-5 w-5 text-accent group-hover:text-accent/80 transition-colors" />
-          <span className="font-semibold text-foreground">بستان الأصول</span>
+          <span
+            className="h-8 w-8 rounded-full border border-accent/30 bg-cover bg-center shadow-sm shadow-black/30"
+            style={{ backgroundImage: `url(${brandIcon})` }}
+            aria-hidden="true"
+          />
+          <span className="font-semibold text-foreground">{labels.brand}</span>
         </Link>
 
-        {/* Search */}
         <div className="hidden md:flex items-center gap-2 flex-1 max-w-sm mx-8">
-          <div className="relative w-full">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="ابحث عن عائلة أو شخص..."
-              className="w-full h-8 rounded-md border border-input bg-muted/40 pr-9 pl-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
+          <PublicSearchForm />
         </div>
 
-        {/* Actions */}
         <nav className="flex items-center gap-2">
           {session?.user ? (
             <>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard">لوحة التحكم</Link>
+                <Link href="/dashboard">{labels.dashboard}</Link>
               </Button>
               {session.user.accountType === "SYSTEM_ADMIN" && (
                 <Button variant="ghost" size="sm" asChild>
-                  <Link href="/admin">الإدارة</Link>
+                  <Link href="/admin">{labels.admin}</Link>
                 </Button>
               )}
               <Button variant="outline" size="sm" asChild>
-                <Link href="/api/auth/signout">خروج</Link>
+                <Link href="/api/auth/signout">{labels.logout}</Link>
               </Button>
             </>
           ) : (
             <>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">دخول</Link>
+                <Link href="/login">{labels.login}</Link>
               </Button>
               <Button variant="gold" size="sm" asChild>
-                <Link href="/register">تسجيل</Link>
+                <Link href="/register">{labels.register}</Link>
               </Button>
             </>
           )}
-          <Button variant="ghost" size="icon" className="md:hidden">
+          <Button variant="ghost" size="icon" className="md:hidden" aria-label={labels.menu}>
             <Menu className="h-4 w-4" />
           </Button>
         </nav>

@@ -13,6 +13,11 @@ interface PersonData {
   [key: string]: unknown;
 }
 
+const labels = {
+  unknown: "\u061f",
+  deceased: "\u0645\u062a\u0648\u0641\u0649",
+};
+
 export const PersonNode = memo(({ data, selected }: NodeProps) => {
   const p = data as PersonData;
   const isMale = p.gender === "MALE";
@@ -28,7 +33,7 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
 
   const initials = p.fullName
     .split(" ")
-    .map((w) => w[0])
+    .map((word) => word[0])
     .slice(0, 2)
     .join("");
 
@@ -36,9 +41,10 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
     <div
       className={`
         w-44 rounded-xl overflow-hidden cursor-pointer select-none transition-all duration-150
-        ${selected
-          ? "shadow-lg shadow-accent/25 ring-2 ring-accent/60 scale-[1.04]"
-          : "shadow-md shadow-black/20 hover:shadow-lg hover:scale-[1.02]"
+        ${
+          selected
+            ? "shadow-lg shadow-accent/25 ring-2 ring-accent/60 scale-[1.04]"
+            : "shadow-md shadow-black/20 hover:shadow-lg hover:scale-[1.02]"
         }
         ${!p.isLiving ? "opacity-80" : ""}
         bg-card border border-border/40
@@ -51,13 +57,9 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
         style={{ top: -4 }}
       />
 
-      {/* Gender colour bar */}
-      <div
-        className={`h-[3px] ${isMale ? "bg-blue-400/70" : "bg-rose-400/70"}`}
-      />
+      <div className={`h-[3px] ${isMale ? "bg-blue-400/70" : "bg-rose-400/70"}`} />
 
       <div className="flex items-center gap-2.5 px-3 py-2.5">
-        {/* Avatar circle */}
         <div
           className={`
             w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold
@@ -65,7 +67,7 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
             ${!p.isLiving ? "grayscale opacity-70" : ""}
           `}
         >
-          {initials || "؟"}
+          {initials || labels.unknown}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -76,21 +78,15 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
             {birthYear ? (
               <span className="text-[10px] text-muted-foreground">
                 {birthYear}
-                {deathYear
-                  ? ` — ${deathYear}`
-                  : !p.isLiving
-                  ? " — ?"
-                  : ""}
+                {deathYear ? ` - ${deathYear}` : !p.isLiving ? ` - ${labels.unknown}` : ""}
               </span>
             ) : null}
             {age !== null && (
-              <span className="text-[10px] text-muted-foreground/60">
-                ({age})
-              </span>
+              <span className="text-[10px] text-muted-foreground/60">({age})</span>
             )}
           </div>
           {!p.isLiving && (
-            <span className="text-[9px] text-muted-foreground/50 italic">متوفى</span>
+            <span className="text-[9px] text-muted-foreground/50 italic">{labels.deceased}</span>
           )}
         </div>
       </div>
@@ -106,4 +102,3 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
 });
 
 PersonNode.displayName = "PersonNode";
-

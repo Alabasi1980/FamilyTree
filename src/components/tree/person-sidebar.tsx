@@ -261,15 +261,6 @@ export function PersonSidebar({
   const [selectedSpouseId, setSelectedSpouseId] = useState("");
   const [error, setError] = useState("");
 
-  // Reset add-forms when person changes
-  useEffect(() => {
-    setAddingChild(false);
-    setAddingParent(false);
-    setAddingSpouse(false);
-    setDeleteConfirm(false);
-    setError("");
-  }, [person.id]);
-
   // ── Computed relatives ──────────────────────────────────────────────────────
   const parents = relations
     .filter((r) => r.childId === person.id)
@@ -396,7 +387,10 @@ export function PersonSidebar({
   const isMale = person.gender === "MALE";
 
   return (
-    <div className="w-72 border-r border-border/50 bg-card flex flex-col overflow-hidden" dir="rtl">
+    <div
+      className="fixed inset-x-3 bottom-3 z-50 max-h-[72vh] rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/40 flex flex-col overflow-hidden md:relative md:inset-auto md:z-auto md:h-full md:max-h-none md:w-72 md:rounded-none md:border-y-0 md:border-l-0 md:border-r md:shadow-none"
+      dir="rtl"
+    >
       {/* ── Header ── */}
       <div
         className={`flex items-center gap-2.5 px-4 py-3 border-b border-border/40 shrink-0 ${

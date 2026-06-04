@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Users, Clock, TreePine, Lock, Globe, Share2 } from "lucide-react";
+import { Users, Clock, Lock, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/base-path";
 
 interface FamilyCardProps {
   id: string;
@@ -15,11 +16,20 @@ interface FamilyCardProps {
   size?: "small" | "medium" | "large";
 }
 
-const sizeConfig = {
-  small:  { card: "h-40",  icon: "h-8  w-8",  tree: "h-6 w-6" },
-  medium: { card: "h-52",  icon: "h-11 w-11", tree: "h-8 w-8" },
-  large:  { card: "h-64",  icon: "h-14 w-14", tree: "h-10 w-10" },
+const labels = {
+  public: "\u0639\u0627\u0645\u0629",
+  private: "\u062e\u0627\u0635\u0629",
+  family: "\u0639\u0627\u0626\u0644\u0629",
+  person: "\u0641\u0631\u062f",
 };
+
+const sizeConfig = {
+  small: { card: "min-h-40", mark: "h-10 w-10" },
+  medium: { card: "min-h-44", mark: "h-12 w-12" },
+  large: { card: "min-h-52", mark: "h-14 w-14" },
+};
+
+const cardIcon = withBasePath("/icons/maskable-icon-512x512.png");
 
 export function FamilyCard({
   name,
@@ -31,63 +41,66 @@ export function FamilyCard({
   size = "medium",
 }: FamilyCardProps) {
   const config = sizeConfig[size];
-
-  const daysAgo = Math.floor(
-    (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const timeLabel =
-    daysAgo === 0 ? "اليوم" : daysAgo === 1 ? "أمس" : `منذ ${daysAgo} يوم`;
+  const timeLabel = new Intl.DateTimeFormat("ar-SA", {
+    dateStyle: "medium",
+  }).format(updatedAt);
 
   return (
-    <Link href={`/family/${slug}`} className="group block">
+    <Link href={`/family/${slug}`} className="group block h-full">
       <Card
         className={cn(
-          "relative overflow-hidden border-border/60 bg-card/80 backdrop-blur",
-          "hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5",
-          "transition-all duration-300",
+          "relative h-full overflow-hidden rounded-lg border-border/60 bg-card/80 backdrop-blur",
+          "transition-all duration-300 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5",
           config.card
         )}
       >
-        {/* Background texture */}
-        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-accent via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_90%,hsl(var(--accent)/0.11),transparent_34%)]" />
+        <div
+          className="absolute -bottom-7 -left-7 h-32 w-32 bg-contain bg-center bg-no-repeat opacity-[0.055] transition-opacity duration-300 group-hover:opacity-[0.1]"
+          style={{ backgroundImage: `url(${cardIcon})` }}
+          aria-hidden="true"
+        />
 
-        <CardContent className="relative h-full flex flex-col justify-between p-4">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2">
+        <CardContent className="relative flex h-full flex-col justify-between p-4">
+          <div className="flex items-start justify-between gap-3">
             <div
               className={cn(
-                "rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110",
-                config.icon
+                "rounded-full border border-accent/20 bg-background/55 bg-cover bg-center shadow-sm shadow-black/20",
+                config.mark
               )}
-            >
-              <TreePine className={cn("text-accent", config.tree)} />
-            </div>
+              style={{ backgroundImage: `url(${cardIcon})` }}
+              aria-hidden="true"
+            />
             <Badge variant={isPublic ? "public" : "private"} className="text-xs">
               {isPublic ? (
-                <><Globe className="h-3 w-3 ml-1" />عامة</>
+                <>
+                  <Globe className="ml-1 h-3 w-3" />
+                  {labels.public}
+                </>
               ) : (
-                <><Lock className="h-3 w-3 ml-1" />خاصة</>
+                <>
+                  <Lock className="ml-1 h-3 w-3" />
+                  {labels.private}
+                </>
               )}
             </Badge>
           </div>
 
-          {/* Name & description */}
-          <div className="mt-2">
-            <h3 className="font-semibold text-foreground text-base leading-snug group-hover:text-accent transition-colors line-clamp-1">
-              عائلة {name}
+          <div className="mt-5">
+            <h3 className="line-clamp-1 text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-accent">
+              {labels.family} {name}
             </h3>
             {originSummary && (
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                 {originSummary}
               </p>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+          <div className="mt-5 flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Users className="h-3.5 w-3.5" />
-              {memberCount} فرد
+              {memberCount} {labels.person}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />

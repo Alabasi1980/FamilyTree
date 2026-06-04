@@ -7,6 +7,7 @@ import { FamilyTree } from "@/components/tree/family-tree";
 import { Badge } from "@/components/ui/badge";
 import { Users, TreePine, Globe, Lock, AlertTriangle } from "lucide-react";
 import SharePasswordForm from "./password-form";
+import { getShareAccessCookieName, verifyShareAccessToken } from "@/lib/share-access";
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -46,8 +47,8 @@ export default async function ShareLinkPage({ params }: Props) {
   // 2. Password check
   if (link.passwordHash) {
     const jar = await cookies();
-    const accessCookie = jar.get(`share_access_${token}`);
-    if (!accessCookie) {
+    const accessCookie = jar.get(getShareAccessCookieName(token));
+    if (!verifyShareAccessToken(token, accessCookie?.value)) {
       return <SharePasswordForm token={token} />;
     }
   }

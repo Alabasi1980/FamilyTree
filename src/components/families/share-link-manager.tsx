@@ -54,7 +54,7 @@ export default function ShareLinkManager({
         : null;
       setLinks((prev) => [
         {
-          id: res.token, // temp id until revalidation
+          id: res.id,
           token: res.token,
           hasPassword: !!password.trim(),
           expiresAt,
@@ -83,7 +83,7 @@ export default function ShareLinkManager({
 
   function formatExpiry(d: Date | null) {
     if (!d) return "لا ينتهي";
-    const diff = Math.ceil((d.getTime() - Date.now()) / 86_400_000);
+    const diff = Math.ceil((d.getTime() - new Date().getTime()) / 86_400_000);
     if (diff < 0) return "منتهي الصلاحية";
     return `ينتهي بعد ${diff} يوم`;
   }
