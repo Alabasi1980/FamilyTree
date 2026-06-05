@@ -6,8 +6,9 @@ import { Navbar } from "@/components/layout/navbar";
 import { FamilyTree } from "@/components/tree/family-tree";
 import { FamilyLinksSection } from "@/components/families/family-links-section";
 import { Badge } from "@/components/ui/badge";
-import { Users, TreePine, Globe, Lock, Settings } from "lucide-react";
+import { Users, TreePine, Globe, Lock, Settings, MapPin } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
+import { formatFamilyHomeland } from "@/lib/family-homeland";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -30,6 +31,10 @@ export default async function FamilyPublicPage({ params }: Props) {
       slug: true,
       isPublic: true,
       originSummary: true,
+      homelandCountry: true,
+      homelandRegion: true,
+      homelandCity: true,
+      homelandConfidence: true,
       _count: { select: { persons: true } },
     },
   });
@@ -81,6 +86,7 @@ export default async function FamilyPublicPage({ params }: Props) {
   });
 
   if (!family.isPublic && !isFamilyAdmin) notFound();
+  const homeland = formatFamilyHomeland(family);
 
   // 5. First parallel batch: family links (needed to find linked persons)
   const personIds = persons.map((p) => p.id);
@@ -231,6 +237,12 @@ export default async function FamilyPublicPage({ params }: Props) {
                 {family.originSummary && (
                   <p className="text-sm text-muted-foreground mt-0.5 max-w-md line-clamp-1">
                     {family.originSummary}
+                  </p>
+                )}
+                {homeland && (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 text-accent/70" />
+                    {homeland}
                   </p>
                 )}
               </div>

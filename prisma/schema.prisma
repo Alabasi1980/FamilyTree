@@ -92,6 +92,13 @@ enum ShareLinkTargetType {
   WORKSPACE
 }
 
+enum HomelandConfidence {
+  VERIFIED
+  LIKELY
+  UNDOCUMENTED
+  UNSPECIFIED
+}
+
 // ===========================
 // CORE MODELS
 // ===========================
@@ -170,6 +177,11 @@ model Family {
   slug             String    @unique
   originSummary    String?
   historicalNotes  String?
+  homelandCountry  String?
+  homelandRegion   String?
+  homelandCity     String?
+  homelandNote     String?
+  homelandConfidence HomelandConfidence @default(UNSPECIFIED)
   isPublic         Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -185,6 +197,7 @@ model Family {
   shareLinks       ShareLink[]
 
   @@index([slug])
+  @@index([homelandCountry, homelandRegion, homelandCity])
 }
 
 model Workspace {
@@ -362,6 +375,11 @@ model AdminRequest {
   requestType           AdminRequestType
   targetFamilyId        String?
   proposedFamilyName    String?
+  proposedHomelandCountry String?
+  proposedHomelandRegion  String?
+  proposedHomelandCity    String?
+  proposedHomelandNote    String?
+  proposedHomelandConfidence HomelandConfidence?
   submittedByUserId     String
   currentReviewerUserId String?
   status                AdminRequestStatus @default(PENDING)

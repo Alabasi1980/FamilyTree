@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Plus, Users, Globe, Lock, ExternalLink } from "lucide-react";
+import { ArrowRight, Plus, Users, Globe, Lock, ExternalLink, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { PersonsList } from "@/components/persons/persons-list";
 import ShareLinkManager from "@/components/families/share-link-manager";
 import FamilyLinkManager from "@/components/families/family-link-manager";
 import MarriageManager from "@/components/persons/marriage-manager";
+import { formatFamilyHomeland } from "@/lib/family-homeland";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -51,6 +52,7 @@ export default async function FamilyDetailPage({ params }: Props) {
 
   const isFamilyAdmin = isSystemAdmin || family.adminAssignments.some((a) => a.user.id === user.id);
   if (!isFamilyAdmin) notFound();
+  const homeland = formatFamilyHomeland(family);
 
   const shareLinks = await db.shareLink.findMany({
     where: { familyId: id, isActive: true },
@@ -162,6 +164,12 @@ export default async function FamilyDetailPage({ params }: Props) {
             <p className="text-sm text-muted-foreground mt-0.5">
               {family._count.persons} فرد مسجّل
             </p>
+            {homeland && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 text-accent/70" />
+                {homeland}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -209,6 +217,11 @@ export default async function FamilyDetailPage({ params }: Props) {
                   name: family.name,
                   originSummary: family.originSummary ?? "",
                   isPublic: family.isPublic,
+                  homelandCountry: family.homelandCountry ?? "",
+                  homelandRegion: family.homelandRegion ?? "",
+                  homelandCity: family.homelandCity ?? "",
+                  homelandNote: family.homelandNote ?? "",
+                  homelandConfidence: family.homelandConfidence,
                 }}
               />
             </CardContent>

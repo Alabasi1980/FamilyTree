@@ -23,43 +23,43 @@ export default function DuplicateWarning({
   familyDashboardId,
 }: Props) {
   const [candidates, setCandidates] = useState<DuplicateCandidate[]>([]);
-  const [dismissed, setDismissed] = useState(false);
+  const [candidateKey, setCandidateKey] = useState("");
+  const [dismissedKey, setDismissedKey] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQueryRef = useRef("");
+  const trimmedName = fullName.trim();
+  const queryKey = `${trimmedName}|${gender}|${birthYear ?? ""}`;
 
   useEffect(() => {
-    const trimmed = fullName.trim();
-    // Need at least 3 chars to check
-    if (trimmed.length < 3) {
-      setCandidates([]);
-      setDismissed(false);
+    if (trimmedName.length < 3) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       return;
     }
 
-    const key = `${trimmed}|${gender}|${birthYear ?? ""}`;
-    if (key === lastQueryRef.current) return;
-
-    setDismissed(false);
+    if (queryKey === lastQueryRef.current) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      lastQueryRef.current = key;
+      lastQueryRef.current = queryKey;
       const results = await findDuplicateCandidates(
         familyId,
-        trimmed,
+        trimmedName,
         gender,
         birthYear,
         excludePersonId
       );
       setCandidates(results);
+      setCandidateKey(queryKey);
     }, 600);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [fullName, gender, birthYear, familyId, excludePersonId]);
+  }, [trimmedName, queryKey, gender, birthYear, familyId, excludePersonId]);
 
-  if (dismissed || candidates.length === 0) return null;
+  if (trimmedName.length < 3 || dismissedKey === queryKey || candidateKey !== queryKey || candidates.length === 0) {
+    return null;
+  }
 
   return (
     <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 p-3 space-y-2">
@@ -72,7 +72,7 @@ export default function DuplicateWarning({
         </div>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={() => setDismissedKey(queryKey)}
           className="text-amber-400/60 hover:text-amber-300 transition-colors"
           title="إخفاء"
         >

@@ -145,7 +145,7 @@ export default async function EditPersonPage({ params }: Props) {
             familyId={id}
             currentPerson={{ id: person.id, fullName: person.fullName }}
             parents={parents}
-            children={children}
+            childPeople={children}
             allPersons={familyPersons}
           />
         </CardContent>

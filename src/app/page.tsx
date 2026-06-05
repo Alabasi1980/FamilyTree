@@ -4,8 +4,9 @@ import { FamilyCard } from "@/components/families/family-card";
 import { PublicSearchForm } from "@/components/search/public-search-form";
 import { db } from "@/lib/db";
 import type { Family } from "@/generated/prisma/client";
-import { Leaf } from "lucide-react";
+import { Leaf, MapPin } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
+import { formatFamilyHomeland } from "@/lib/family-homeland";
 
 type FamilyWithCount = Family & { _count: { persons: number } };
 
@@ -22,6 +23,12 @@ const labels = {
     "\u0623\u0631\u0634\u064a\u0641 \u0639\u0627\u0626\u0644\u064a \u0631\u0642\u0645\u064a \u0644\u062a\u0648\u062b\u064a\u0642 \u0627\u0644\u0623\u0646\u0633\u0627\u0628\u060c \u0631\u0628\u0637 \u0627\u0644\u0639\u0627\u0626\u0644\u0627\u062a\u060c \u0648\u062d\u0641\u0638 \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0628\u0637\u0631\u064a\u0642\u0629 \u062a\u062d\u062a\u0631\u0645 \u0627\u0644\u062e\u0635\u0648\u0635\u064a\u0629 \u0648\u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629.",
   registeredFamilies:
     "\u0627\u0644\u0639\u0627\u0626\u0644\u0627\u062a \u0627\u0644\u0645\u0633\u062c\u0644\u0629",
+  homelandGroups:
+    "\u0627\u0644\u0645\u0648\u0627\u0637\u0646 \u0627\u0644\u0639\u0627\u0626\u0644\u064a\u0629",
+  unspecifiedHomeland:
+    "\u0645\u0648\u0637\u0646 \u063a\u064a\u0631 \u0645\u062d\u062f\u062f",
+  familyCount:
+    "\u0639\u0627\u0626\u0644\u0629",
   footer:
     "\u0628\u0633\u062a\u0627\u0646 \u0627\u0644\u0623\u0635\u0648\u0644 - \u062d\u0641\u0638 \u0627\u0644\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0639\u0627\u0626\u0644\u064a \u0644\u0644\u0623\u062c\u064a\u0627\u0644 \u0627\u0644\u0642\u0627\u062f\u0645\u0629",
 };
@@ -52,20 +59,44 @@ async function FamiliesGarden() {
     return "small";
   };
 
+  const groups = new Map<string, FamilyWithCount[]>();
+  (families as FamilyWithCount[]).forEach((family) => {
+    const homeland = formatFamilyHomeland(family) || labels.unspecifiedHomeland;
+    groups.set(homeland, [...(groups.get(homeland) ?? []), family]);
+  });
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {(families as FamilyWithCount[]).map((family) => (
-        <FamilyCard
-          key={family.id}
-          id={family.id}
-          name={family.name}
-          slug={family.slug}
-          memberCount={family._count.persons}
-          isPublic={family.isPublic}
-          updatedAt={family.updatedAt}
-          originSummary={family.originSummary}
-          size={getSize(family._count.persons)}
-        />
+    <div className="space-y-8">
+      {Array.from(groups.entries()).map(([homeland, group]) => (
+        <section key={homeland} className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <MapPin className="h-4 w-4 text-accent" />
+              {homeland}
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {group.length} {labels.familyCount}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.map((family) => (
+              <FamilyCard
+                key={family.id}
+                id={family.id}
+                name={family.name}
+                slug={family.slug}
+                memberCount={family._count.persons}
+                isPublic={family.isPublic}
+                updatedAt={family.updatedAt}
+                originSummary={family.originSummary}
+                homelandCountry={family.homelandCountry}
+                homelandRegion={family.homelandRegion}
+                homelandCity={family.homelandCity}
+                size={getSize(family._count.persons)}
+              />
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
@@ -120,7 +151,7 @@ export default function HomePage() {
         <section className="container mx-auto max-w-6xl px-4 py-10">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-foreground">
-              {labels.registeredFamilies}
+              {labels.homelandGroups}
             </h2>
           </div>
 

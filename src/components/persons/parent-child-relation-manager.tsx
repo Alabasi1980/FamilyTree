@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  UserPlus, UserMinus, Plus, X, Loader2, ChevronDown, ChevronUp,
+  UserPlus, UserMinus, Plus, X, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PersonCombobox from "@/components/persons/person-combobox";
@@ -277,7 +277,7 @@ interface Props {
   familyId: string;
   currentPerson: { id: string; fullName: string };
   parents: RelatedPerson[];
-  children: RelatedPerson[];
+  childPeople: RelatedPerson[];
   allPersons: PersonOption[];
 }
 
@@ -285,7 +285,7 @@ export default function ParentChildRelationManager({
   familyId,
   currentPerson,
   parents,
-  children,
+  childPeople,
   allPersons,
 }: Props) {
   const router = useRouter();
@@ -294,7 +294,7 @@ export default function ParentChildRelationManager({
 
   // Local state mirrors — optimistic UI for removes
   const [localParents, setLocalParents] = useState(parents);
-  const [localChildren, setLocalChildren] = useState(children);
+  const [localChildren, setLocalChildren] = useState(childPeople);
 
   function handleRemoveParent(parentId: string) {
     if (!confirm("هل تريد إزالة هذه العلاقة الأبوية؟")) return;

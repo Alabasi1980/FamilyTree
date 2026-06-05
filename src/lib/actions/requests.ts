@@ -19,7 +19,7 @@ function makeSlug(name: string) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "-")
-    .replace(/[^\w؀-ۿ-]/g, "")
+    .replace(/[^\w\u0600-\u06FF-]/g, "")
     .slice(0, 60);
 }
 
@@ -44,6 +44,11 @@ type FamilyInfoPayload = {
   name?: string;
   originSummary?: string;
   historicalNotes?: string;
+  homelandCountry?: string;
+  homelandRegion?: string;
+  homelandCity?: string;
+  homelandNote?: string;
+  homelandConfidence?: "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED";
   isPublic?: boolean;
 };
 
@@ -119,6 +124,11 @@ async function applyEditRequest(req: {
         ...(payload.name ? { name: payload.name } : {}),
         ...(payload.originSummary !== undefined ? { originSummary: payload.originSummary } : {}),
         ...(payload.historicalNotes !== undefined ? { historicalNotes: payload.historicalNotes } : {}),
+        ...(payload.homelandCountry !== undefined ? { homelandCountry: payload.homelandCountry } : {}),
+        ...(payload.homelandRegion !== undefined ? { homelandRegion: payload.homelandRegion } : {}),
+        ...(payload.homelandCity !== undefined ? { homelandCity: payload.homelandCity } : {}),
+        ...(payload.homelandNote !== undefined ? { homelandNote: payload.homelandNote } : {}),
+        ...(payload.homelandConfidence !== undefined ? { homelandConfidence: payload.homelandConfidence } : {}),
         ...(payload.isPublic !== undefined ? { isPublic: payload.isPublic } : {}),
       },
     });
@@ -179,6 +189,11 @@ export async function reviewRequest(
         targetFamilyId: true,
         submittedByUserId: true,
         proposedFamilyName: true,
+        proposedHomelandCountry: true,
+        proposedHomelandRegion: true,
+        proposedHomelandCity: true,
+        proposedHomelandNote: true,
+        proposedHomelandConfidence: true,
       },
     });
     if (!req) return { success: false, error: "الطلب غير موجود" };
@@ -223,6 +238,11 @@ export async function reviewRequest(
           data: {
             name: updated.proposedFamilyName,
             slug,
+            homelandCountry: updated.proposedHomelandCountry,
+            homelandRegion: updated.proposedHomelandRegion,
+            homelandCity: updated.proposedHomelandCity,
+            homelandNote: updated.proposedHomelandNote,
+            homelandConfidence: updated.proposedHomelandConfidence ?? "UNSPECIFIED",
             adminAssignments: {
               create: { userId: updated.submittedByUserId, assignedByUserId: userId },
             },

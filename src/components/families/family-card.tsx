@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Users, Clock, Lock, Globe } from "lucide-react";
+import { Users, Clock, Lock, Globe, MapPin } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { withBasePath } from "@/lib/base-path";
+import { formatFamilyHomeland } from "@/lib/family-homeland";
 
 interface FamilyCardProps {
   id: string;
@@ -13,6 +14,9 @@ interface FamilyCardProps {
   isPublic: boolean;
   updatedAt: Date;
   originSummary?: string | null;
+  homelandCountry?: string | null;
+  homelandRegion?: string | null;
+  homelandCity?: string | null;
   size?: "small" | "medium" | "large";
 }
 
@@ -38,9 +42,13 @@ export function FamilyCard({
   isPublic,
   updatedAt,
   originSummary,
+  homelandCountry,
+  homelandRegion,
+  homelandCity,
   size = "medium",
 }: FamilyCardProps) {
   const config = sizeConfig[size];
+  const homeland = formatFamilyHomeland({ homelandCountry, homelandRegion, homelandCity });
   const timeLabel = new Intl.DateTimeFormat("ar-SA", {
     dateStyle: "medium",
   }).format(updatedAt);
@@ -90,6 +98,12 @@ export function FamilyCard({
             <h3 className="line-clamp-1 text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-accent">
               {labels.family} {name}
             </h3>
+            {homeland && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-accent/70" />
+                <span className="line-clamp-1">{homeland}</span>
+              </p>
+            )}
             {originSummary && (
               <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                 {originSummary}

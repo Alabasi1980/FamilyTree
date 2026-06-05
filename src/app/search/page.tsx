@@ -68,6 +68,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               { name: { contains: query, mode: "insensitive" } },
               { originSummary: { contains: query, mode: "insensitive" } },
               { historicalNotes: { contains: query, mode: "insensitive" } },
+              { homelandCountry: { contains: query, mode: "insensitive" } },
+              { homelandRegion: { contains: query, mode: "insensitive" } },
+              { homelandCity: { contains: query, mode: "insensitive" } },
+              { homelandNote: { contains: query, mode: "insensitive" } },
             ],
           },
           include: {
@@ -159,6 +163,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                         isPublic={family.isPublic}
                         updatedAt={family.updatedAt}
                         originSummary={family.originSummary}
+                        homelandCountry={family.homelandCountry}
+                        homelandRegion={family.homelandRegion}
+                        homelandCity={family.homelandCity}
                         size="medium"
                       />
                     ))}

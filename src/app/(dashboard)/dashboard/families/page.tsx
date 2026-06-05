@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, TreePine, Users, Globe, Lock, ChevronLeft } from "lucide-react";
+import { Plus, TreePine, Users, Globe, Lock, ChevronLeft, MapPin } from "lucide-react";
+import { formatFamilyHomeland } from "@/lib/family-homeland";
 export default async function FamiliesListPage() {
   const session = await auth();
   const user = session!.user;
@@ -65,6 +66,12 @@ export default async function FamiliesListPage() {
                     <p className="font-medium text-foreground group-hover:text-accent transition-colors">
                       عائلة {family.name}
                     </p>
+                    {formatFamilyHomeland(family) && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3 text-accent/70" />
+                        {formatFamilyHomeland(family)}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Users className="h-3 w-3" />
