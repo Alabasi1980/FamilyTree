@@ -23,6 +23,13 @@ import { createPerson } from "@/lib/actions/persons";
 
 type FlowPersonData = PersonData & Record<string, unknown>;
 type FamilyTreeNode = Node<FlowPersonData, "person">;
+type LinkedFamilyBadge = {
+  familyId: string;
+  name: string;
+  slug: string;
+  linkType: "KINSHIP" | "IN_LAW";
+  spouseName: string;
+};
 
 // ─── Re-export types for convenience ────────────────────────────────────────────────
 export type { PersonData, Relation, Marriage, LinkedFamilyInfo };
@@ -206,16 +213,84 @@ export function FamilyTree({
   linkedFamilies = [],
 }: Props) {
   const positions = useMemo(() => buildLayout(persons, relations), [persons, relations]);
+  const [activeLinkedFamilyId, setActiveLinkedFamilyId] = useState<string | null>(null);
+
+  const personIdsSet = useMemo(() => new Set(persons.map((person) => person.id)), [persons]);
+  const linkedPersonById = useMemo(
+    () => new Map(linkedPersons.map((person) => [person.id, person] as [string, PersonData])),
+    [linkedPersons]
+  );
+  const linkedFamilyByFamilyId = useMemo(
+    () => new Map(linkedFamilies.map((family) => [family.familyId, family] as [string, LinkedFamilyInfo])),
+    [linkedFamilies]
+  );
+  const linkedBadgesByPerson = useMemo(() => {
+    const map = new Map<string, LinkedFamilyBadge[]>();
+    const seen = new Set<string>();
+
+    marriages.forEach((marriage) => {
+      const linkedA = linkedPersonById.get(marriage.personAId);
+      const linkedB = linkedPersonById.get(marriage.personBId);
+      const currentPersonId = linkedA ? marriage.personBId : linkedB ? marriage.personAId : null;
+      const linkedSpouse = linkedA ?? linkedB;
+
+      if (!currentPersonId || !linkedSpouse?.sourceFamilyId || !personIdsSet.has(currentPersonId)) return;
+
+      const familyInfo = linkedFamilyByFamilyId.get(linkedSpouse.sourceFamilyId);
+      const key = `${currentPersonId}:${linkedSpouse.sourceFamilyId}:${linkedSpouse.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const badge: LinkedFamilyBadge = {
+        familyId: linkedSpouse.sourceFamilyId,
+        name: familyInfo?.name ?? linkedSpouse.sourceFamilyName ?? "",
+        slug: familyInfo?.slug ?? linkedSpouse.sourceFamilySlug ?? "",
+        linkType: familyInfo?.linkType ?? "IN_LAW",
+        spouseName: linkedSpouse.fullName,
+      };
+
+      map.set(currentPersonId, [...(map.get(currentPersonId) ?? []), badge]);
+    });
+
+    return map;
+  }, [linkedFamilyByFamilyId, linkedPersonById, marriages, personIdsSet]);
+
+  const linkedConnectionCounts = useMemo(() => {
+    const familyToPersons = new Map<string, Set<string>>();
+
+    linkedBadgesByPerson.forEach((badges, personId) => {
+      badges.forEach((badge) => {
+        const people = familyToPersons.get(badge.familyId) ?? new Set<string>();
+        people.add(personId);
+        familyToPersons.set(badge.familyId, people);
+      });
+    });
+
+    return Object.fromEntries(
+      Array.from(familyToPersons.entries()).map(([familyId, people]) => [familyId, people.size])
+    );
+  }, [linkedBadgesByPerson]);
 
   const buildNodes = useCallback(
     (): FamilyTreeNode[] =>
-      persons.map((p) => ({
-        id: p.id,
-        type: "person",
-        position: positions.get(p.id) ?? { x: 0, y: 0 },
-        data: p as FlowPersonData,
-      })),
-    [persons, positions]
+      persons.map((p) => {
+        const badges = linkedBadgesByPerson.get(p.id) ?? [];
+        const isHighlighted = !!activeLinkedFamilyId && badges.some((badge) => badge.familyId === activeLinkedFamilyId);
+        const isDimmed = !!activeLinkedFamilyId && !isHighlighted;
+
+        return {
+          id: p.id,
+          type: "person",
+          position: positions.get(p.id) ?? { x: 0, y: 0 },
+          data: {
+            ...p,
+            linkedFamilyBadges: badges,
+            isHighlighted,
+            isDimmed,
+          } as FlowPersonData,
+        };
+      }),
+    [activeLinkedFamilyId, linkedBadgesByPerson, persons, positions]
   );
 
   const buildEdges = useCallback((): Edge[] => {
@@ -226,26 +301,35 @@ export function FamilyTree({
       type: "smoothstep",
       style: { stroke: "hsl(145 35% 32%)", strokeWidth: 1.5, opacity: 0.7 },
     }));
-    const mEdges: Edge[] = marriages.map((m) => ({
-      id: `e-m-${m.id}`,
-      source: m.personAId,
-      target: m.personBId,
-      type: "straight",
-      style: { stroke: "hsl(350 70% 60%)", strokeWidth: 1.5, strokeDasharray: "5 4", opacity: 0.8 },
-      label: "♥",
-      labelStyle: { fill: "hsl(350 70% 60%)", fontSize: 10 },
-      labelBgStyle: { fill: "transparent" },
-    }));
+    const mEdges: Edge[] = marriages
+      .filter((m) => personIdsSet.has(m.personAId) && personIdsSet.has(m.personBId))
+      .map((m) => ({
+        id: `e-m-${m.id}`,
+        source: m.personAId,
+        target: m.personBId,
+        type: "straight",
+        style: { stroke: "hsl(350 70% 60%)", strokeWidth: 1.5, strokeDasharray: "5 4", opacity: 0.8 },
+        label: "♥",
+        labelStyle: { fill: "hsl(350 70% 60%)", fontSize: 10 },
+        labelBgStyle: { fill: "transparent" },
+      }));
     return [...pcEdges, ...mEdges];
-  }, [relations, marriages]);
+  }, [relations, marriages, personIdsSet]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FamilyTreeNode>(buildNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(buildEdges());
 
   // Sync when server re-renders with new data
   const dataKey = useMemo(
-    () => persons.map((p) => p.id).sort().join(",") + "|" + relations.length + "|" + marriages.length,
-    [persons, relations, marriages]
+    () =>
+      persons.map((p) => p.id).sort().join(",") +
+      "|" +
+      relations.length +
+      "|" +
+      marriages.length +
+      "|" +
+      (activeLinkedFamilyId ?? ""),
+    [activeLinkedFamilyId, persons, relations, marriages]
   );
   const prevKeyRef = useRef(dataKey);
   useEffect(() => {
@@ -338,7 +422,12 @@ export function FamilyTree({
 
           {/* Linked families panel */}
           {linkedFamilies.length > 0 && (
-            <LinkedFamiliesPanel linkedFamilies={linkedFamilies} />
+            <LinkedFamiliesPanel
+              linkedFamilies={linkedFamilies}
+              activeFamilyId={activeLinkedFamilyId}
+              connectionCounts={linkedConnectionCounts}
+              onFamilyToggle={setActiveLinkedFamilyId}
+            />
           )}
 
           {/* Floating "Add Person" button */}

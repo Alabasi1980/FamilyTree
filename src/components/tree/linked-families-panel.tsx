@@ -2,94 +2,153 @@
 
 import { useState } from "react";
 import { Panel } from "@xyflow/react";
-import { Link2, TreePine, ChevronDown, ChevronUp } from "lucide-react";
+import { ExternalLink, Link2, TreePine, ChevronDown, ChevronUp, X } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export interface LinkedFamilyInfo {
-  /** FamilyLink record id */
   id: string;
+  familyId: string;
   name: string;
   slug: string;
   linkType: "KINSHIP" | "IN_LAW";
 }
 
-const LINK_LABELS: Record<LinkedFamilyInfo["linkType"], string> = {
-  KINSHIP: "نسب",
-  IN_LAW: "مصاهرة",
+interface LinkedFamiliesPanelProps {
+  linkedFamilies: LinkedFamilyInfo[];
+  activeFamilyId: string | null;
+  connectionCounts: Record<string, number>;
+  onFamilyToggle: (familyId: string | null) => void;
+}
+
+const labels = {
+  title:
+    "\u0639\u0627\u0626\u0644\u0627\u062a \u0645\u0631\u062a\u0628\u0637\u0629",
+  kinship: "\u0646\u0633\u0628",
+  inLaw: "\u0645\u0635\u0627\u0647\u0631\u0629",
+  showAll:
+    "\u0639\u0631\u0636 \u0627\u0644\u0643\u0644",
+  collapse:
+    "\u0637\u064a \u0627\u0644\u0642\u0627\u0626\u0645\u0629",
+  clear:
+    "\u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u062a\u0638\u0644\u064a\u0644",
+  connectedPersons:
+    "\u0634\u062e\u0635 \u0645\u0631\u062a\u0628\u0637",
+  openFamily:
+    "\u0641\u062a\u062d \u0627\u0644\u0639\u0627\u0626\u0644\u0629",
+  moreFamily:
+    "\u0639\u0627\u0626\u0644\u0629 \u0623\u062e\u0631\u0649",
 };
 
-const LINK_COLORS: Record<LinkedFamilyInfo["linkType"], string> = {
+const linkLabels: Record<LinkedFamilyInfo["linkType"], string> = {
+  KINSHIP: labels.kinship,
+  IN_LAW: labels.inLaw,
+};
+
+const linkColors: Record<LinkedFamilyInfo["linkType"], string> = {
   KINSHIP: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
   IN_LAW: "text-amber-400 bg-amber-400/10 border-amber-400/30",
 };
 
-const COLLAPSED_COUNT = 2;
+const collapsedCount = 3;
 
 export function LinkedFamiliesPanel({
   linkedFamilies,
-}: {
-  linkedFamilies: LinkedFamilyInfo[];
-}) {
-  const [expanded, setExpanded] = useState(linkedFamilies.length <= COLLAPSED_COUNT);
+  activeFamilyId,
+  connectionCounts,
+  onFamilyToggle,
+}: LinkedFamiliesPanelProps) {
+  const [expanded, setExpanded] = useState(linkedFamilies.length <= collapsedCount);
 
   if (linkedFamilies.length === 0) return null;
 
-  const visible = expanded ? linkedFamilies : linkedFamilies.slice(0, COLLAPSED_COUNT);
-  const remaining = linkedFamilies.length - COLLAPSED_COUNT;
+  const visible = expanded ? linkedFamilies : linkedFamilies.slice(0, collapsedCount);
+  const remaining = linkedFamilies.length - collapsedCount;
 
   return (
     <Panel position="bottom-left">
       <div
-        className="bg-card/90 border border-border/60 rounded-xl shadow-lg p-3 w-56 backdrop-blur-sm"
+        className="w-64 rounded-lg border border-border/60 bg-card/90 p-3 shadow-lg backdrop-blur-sm"
         dir="rtl"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             <Link2 className="h-3 w-3" />
-            عائلات مرتبطة
+            {labels.title}
           </span>
-          {linkedFamilies.length > COLLAPSED_COUNT && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={expanded ? "طي القائمة" : "عرض الكل"}
-            >
-              {expanded ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {activeFamilyId && (
+              <button
+                type="button"
+                onClick={() => onFamilyToggle(null)}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+                aria-label={labels.clear}
+                title={labels.clear}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {linkedFamilies.length > collapsedCount && (
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+                aria-label={expanded ? labels.collapse : labels.showAll}
+              >
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Family cards */}
         <div className="space-y-1">
-          {visible.map((family) => (
-            <Link
-              key={family.id}
-              href={`/family/${encodeURIComponent(family.slug)}`}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-secondary/60 transition-colors group"
-            >
-              <TreePine className="h-3.5 w-3.5 text-accent/60 shrink-0" />
-              <span className="flex-1 text-xs text-foreground/80 truncate group-hover:text-foreground transition-colors">
-                {family.name}
-              </span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${LINK_COLORS[family.linkType]}`}
+          {visible.map((family) => {
+            const count = connectionCounts[family.familyId] ?? 0;
+            const isActive = activeFamilyId === family.familyId;
+            return (
+              <div
+                key={family.id}
+                className={cn(
+                  "flex items-center gap-1 rounded-lg border border-transparent px-1.5 py-1 transition-colors",
+                  isActive ? "border-accent/40 bg-accent/10" : "hover:bg-secondary/50"
+                )}
               >
-                {LINK_LABELS[family.linkType]}
-              </span>
-            </Link>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onFamilyToggle(isActive ? null : family.familyId)}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-right"
+                >
+                  <TreePine className="h-3.5 w-3.5 shrink-0 text-accent/70" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs text-foreground/90">{family.name}</span>
+                    {count > 0 && (
+                      <span className="block text-[10px] text-muted-foreground">
+                        {count} {labels.connectedPersons}
+                      </span>
+                    )}
+                  </span>
+                  <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${linkColors[family.linkType]}`}>
+                    {linkLabels[family.linkType]}
+                  </span>
+                </button>
+                <Link
+                  href={`/family/${encodeURIComponent(family.slug)}`}
+                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-accent"
+                  title={labels.openFamily}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            );
+          })}
 
           {!expanded && remaining > 0 && (
             <button
+              type="button"
               onClick={() => setExpanded(true)}
-              className="w-full text-[10px] text-muted-foreground hover:text-foreground transition-colors text-center py-1 rounded hover:bg-secondary/40"
+              className="w-full rounded py-1 text-center text-[10px] text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
             >
-              +{remaining} عائلة أخرى
+              +{remaining} {labels.moreFamily}
             </button>
           )}
         </div>

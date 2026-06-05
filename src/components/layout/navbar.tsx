@@ -1,71 +1,89 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { TreePine } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
 import { PublicSearchForm } from "@/components/search/public-search-form";
 
 const brandIcon = withBasePath("/icons/icon-192x192.png");
 
 const labels = {
-  brand: "\u0628\u0633\u062a\u0627\u0646 \u0627\u0644\u0623\u0635\u0648\u0644",
-  dashboard: "\u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645",
-  admin: "\u0627\u0644\u0625\u062f\u0627\u0631\u0629",
-  logout: "\u062e\u0631\u0648\u062c",
-  login: "\u062f\u062e\u0648\u0644",
-  register: "\u062a\u0633\u062c\u064a\u0644",
-  menu: "\u0627\u0644\u0642\u0627\u0626\u0645\u0629",
+  brand: "بستان الأصول",
+  brandSub: "الأصول",
+  dashboard: "لوحة التحكم",
+  admin: "الإدارة",
+  logout: "خروج",
+  login: "دخول",
+  register: "انضم",
 };
 
 export async function Navbar() {
   const session = await auth();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
-      <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 group">
-          <span
-            className="h-8 w-8 rounded-full border border-accent/30 bg-cover bg-center shadow-sm shadow-black/30"
-            style={{ backgroundImage: `url(${brandIcon})` }}
-            aria-hidden="true"
-          />
-          <span className="font-semibold text-foreground">{labels.brand}</span>
-        </Link>
+    <header className="sticky top-0 z-50 w-full">
+      {/* خط مضيء علوي */}
+      <div className="h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
 
-        <div className="hidden md:flex items-center gap-2 flex-1 max-w-sm mx-8">
-          <PublicSearchForm />
-        </div>
+      <div className="border-b border-border/30 bg-background/90 backdrop-blur-md">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4 gap-4">
 
-        <nav className="flex items-center gap-2">
-          {session?.user ? (
-            <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard">{labels.dashboard}</Link>
-              </Button>
-              {session.user.accountType === "SYSTEM_ADMIN" && (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/admin">{labels.admin}</Link>
+          {/* Brand */}
+          <Link href="/" className="group flex items-center gap-2.5 shrink-0">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-lg bg-accent/15 blur-sm group-hover:bg-accent/25 transition-all duration-300" />
+              <div className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-accent/25 bg-background/60">
+                <TreePine className="h-4 w-4 text-accent" />
+              </div>
+            </div>
+            <span className="font-bold text-sm text-foreground leading-none">
+              بستان{" "}
+              <span className="text-accent">الأصول</span>
+            </span>
+          </Link>
+
+          {/* Search — وسط */}
+          <div className="hidden md:flex flex-1 max-w-sm mx-4">
+            <PublicSearchForm />
+          </div>
+
+          {/* Nav actions */}
+          <nav className="flex items-center gap-1.5 shrink-0">
+            {session?.user ? (
+              <>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
+                  <Link href="/dashboard">{labels.dashboard}</Link>
                 </Button>
-              )}
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/api/auth/signout">{labels.logout}</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">{labels.login}</Link>
-              </Button>
-              <Button variant="gold" size="sm" asChild>
-                <Link href="/register">{labels.register}</Link>
-              </Button>
-            </>
-          )}
-          <Button variant="ghost" size="icon" className="md:hidden" aria-label={labels.menu}>
-            <Menu className="h-4 w-4" />
-          </Button>
-        </nav>
+                {session.user.accountType === "SYSTEM_ADMIN" && (
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
+                    <Link href="/admin">{labels.admin}</Link>
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="text-xs h-8 border-border/50 hover:border-border" asChild>
+                  <Link href="/api/auth/signout">{labels.logout}</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
+                  <Link href="/login">{labels.login}</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs bg-accent/20 hover:bg-accent/30 text-accent border border-accent/30 hover:border-accent/50 transition-all duration-200"
+                  asChild
+                >
+                  <Link href="/register">{labels.register}</Link>
+                </Button>
+              </>
+            )}
+          </nav>
+
+        </div>
       </div>
+
+      {/* خط سفلي خفي */}
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
     </header>
   );
 }

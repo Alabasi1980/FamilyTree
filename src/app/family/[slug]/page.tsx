@@ -215,6 +215,7 @@ export default async function FamilyPublicPage({ params }: Props) {
 
   const linkedFamiliesForPanel = familyLinks.map((l) => ({
     id: l.id,
+    familyId: l.otherFamily.id,
     name: l.otherFamily.name,
     slug: l.otherFamily.slug,
     linkType: l.linkType,

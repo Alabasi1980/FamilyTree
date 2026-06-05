@@ -115,11 +115,8 @@ export function FamilySettingsForm({ familyId, initialData }: Props) {
           <Field name="homelandCity" label={labels.city} value={initialData.homelandCity} />
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">{labels.confidence}</label>
-            <select
-              name="homelandConfidence"
-              defaultValue={initialData.homelandConfidence}
-              className="h-8 w-full rounded-md border border-input bg-background/50 px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
+            <select name="homelandConfidence" defaultValue={initialData.homelandConfidence}
+              className="h-8 w-full rounded-md border border-input bg-background/50 px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" >
               <option value="UNSPECIFIED">{labels.unspecified}</option>
               <option value="LIKELY">{labels.likely}</option>
               <option value="VERIFIED">{labels.verified}</option>
