@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import EditPersonForm from "./edit-person-form";
 import MarriageManager from "@/components/persons/marriage-manager";
+import ParentChildRelationManager from "@/components/persons/parent-child-relation-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Props {
@@ -64,10 +65,10 @@ export default async function EditPersonPage({ params }: Props) {
   }));
   const inLawFamilyIds = inLawLinks.map((l) => l.familyId);
 
-  const [familyPersons, linkedPersonsRaw, rawMarriages] = await Promise.all([
+  const [familyPersons, linkedPersonsRaw, rawMarriages, rawParentRelations, rawChildRelations] = await Promise.all([
     db.person.findMany({
       where: { familyId: id, deletedAt: null, id: { not: personId } },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, gender: true, isLiving: true },
       orderBy: { fullName: "asc" },
     }),
     inLawFamilyIds.length > 0
@@ -84,6 +85,14 @@ export default async function EditPersonPage({ params }: Props) {
       },
       select: { id: true, personAId: true, personBId: true, marriageDate: true, status: true, divorceDate: true },
     }),
+    db.parentChildRelation.findMany({
+      where: { childPersonId: personId, parent: { deletedAt: null } },
+      select: { parent: { select: { id: true, fullName: true, gender: true, isLiving: true } } },
+    }),
+    db.parentChildRelation.findMany({
+      where: { parentPersonId: personId, child: { deletedAt: null } },
+      select: { child: { select: { id: true, fullName: true, gender: true, isLiving: true } } },
+    }),
   ]);
 
   const linkedPersonsForManager = linkedPersonsRaw.map((p) => ({
@@ -98,6 +107,9 @@ export default async function EditPersonPage({ params }: Props) {
     ...familyPersons.map((p) => [p.id, p.fullName] as [string, string]),
     ...linkedPersonsRaw.map((p) => [p.id, p.fullName] as [string, string]),
   ]);
+
+  const parents = rawParentRelations.map((r) => r.parent);
+  const children = rawChildRelations.map((r) => r.child);
 
   const marriages = rawMarriages.map((m) => ({
     id: m.id,
@@ -123,10 +135,26 @@ export default async function EditPersonPage({ params }: Props) {
       </div>
       <EditPersonForm person={person} familyId={id} />
 
+      {/* Parent / Child relations */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">الوالدان والأبناء</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ParentChildRelationManager
+            familyId={id}
+            currentPerson={{ id: person.id, fullName: person.fullName }}
+            parents={parents}
+            children={children}
+            allPersons={familyPersons}
+          />
+        </CardContent>
+      </Card>
+
       {/* Marriages for this person */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">زيجات {person.fullName}</CardTitle>
+          <CardTitle className="text-base">الزيجات</CardTitle>
         </CardHeader>
         <CardContent>
           <MarriageManager

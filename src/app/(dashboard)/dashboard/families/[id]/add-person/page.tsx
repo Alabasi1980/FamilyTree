@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createPerson } from "@/lib/actions/persons";
 import { withBasePath } from "@/lib/base-path";
+import DuplicateWarning from "@/components/persons/duplicate-warning";
 
 export default function AddPersonPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function AddPersonPage() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [gender, setGender] = useState<"MALE" | "FEMALE">("MALE");
+  const [fullName, setFullName] = useState("");
+  const [birthYear, setBirthYear] = useState<number | undefined>();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -58,7 +61,14 @@ export default function AddPersonPage() {
           <label className="text-sm font-medium text-foreground">
             الاسم الكامل <span className="text-destructive">*</span>
           </label>
-          <Input name="fullName" placeholder="محمد أحمد علي" required className="bg-card/60" />
+          <Input
+            name="fullName"
+            placeholder="محمد أحمد علي"
+            required
+            className="bg-card/60"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
         </div>
 
         {/* Gender */}
@@ -82,6 +92,15 @@ export default function AddPersonPage() {
           </div>
         </div>
 
+        {/* Duplicate detection */}
+        <DuplicateWarning
+          familyId={familyId}
+          fullName={fullName}
+          gender={gender}
+          birthYear={birthYear}
+          familyDashboardId={familyId}
+        />
+
         {/* Living status */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground">الحالة</label>
@@ -99,7 +118,16 @@ export default function AddPersonPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">تاريخ الميلاد</label>
-            <Input name="birthDate" type="date" className="bg-card/60" dir="ltr" />
+            <Input
+              name="birthDate"
+              type="date"
+              className="bg-card/60"
+              dir="ltr"
+              onChange={(e) => {
+                const y = e.target.value ? new Date(e.target.value).getFullYear() : undefined;
+                setBirthYear(y);
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">تاريخ الوفاة</label>
