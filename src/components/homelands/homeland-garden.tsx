@@ -25,19 +25,33 @@ const labels = {
 
 // ── Tree SVG — بسيط وعضوي ──────────────────────────────────────────────────
 
+const treeSizes = { sm: 18, md: 26, lg: 38 } as const;
+const treeOpacityClass: Record<string, string> = {
+  "1":   "opacity-100",
+  "0.85": "opacity-85",
+  "0.75": "opacity-75",
+  "0.65": "opacity-65",
+  "0.6":  "opacity-60",
+  "0.55": "opacity-55",
+  "0.45": "opacity-45",
+};
+
 function TreeIcon({ size = "md", opacity = 1 }: { size?: "sm" | "md" | "lg"; opacity?: number }) {
-  const dims = { sm: 18, md: 26, lg: 38 }[size];
+  const dims = treeSizes[size];
+  const cls = treeOpacityClass[String(opacity)] ?? "opacity-100";
   return (
     <svg
       width={dims}
       height={dims}
       viewBox="0 0 24 24"
       fill="none"
-      style={{ opacity }}
+      className={cls}
       aria-hidden="true"
     >
-      <path d="M12 2C8 2 5 6 5 9.5c0 2.5 1.5 4.5 3.5 5.5H10v5h4v-5h1.5c2-.9 3.5-3 3.5-5.5C19 6 16 2 12 2z"
-        fill="currentColor" />
+      <path
+        d="M12 2C8 2 5 6 5 9.5c0 2.5 1.5 4.5 3.5 5.5H10v5h4v-5h1.5c2-.9 3.5-3 3.5-5.5C19 6 16 2 12 2z"
+        fill="currentColor"
+      />
       <rect x="11" y="14" width="2" height="6" rx="1" fill="currentColor" opacity="0.6" />
     </svg>
   );
@@ -137,9 +151,7 @@ function HomelandPlotCard({
         <div className={cn("absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b to-transparent opacity-90", accent)} />
 
         {/* نسيج دقيق */}
-        <div className="pointer-events-none absolute inset-0 opacity-[0.025]"
-          style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
-        />
+        <div className="card-texture pointer-events-none absolute inset-0 opacity-[0.025]" />
 
         {/* خط أرضي */}
         <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />

@@ -10,6 +10,7 @@ import { FamilySettingsForm } from "@/components/families/family-settings-form";
 import { PersonsList } from "@/components/persons/persons-list";
 import ShareLinkManager from "@/components/families/share-link-manager";
 import FamilyLinkManager from "@/components/families/family-link-manager";
+import BranchUnificationManager from "@/components/families/branch-unification-manager";
 import MarriageManager from "@/components/persons/marriage-manager";
 import { formatFamilyHomeland } from "@/lib/family-homeland";
 
@@ -88,6 +89,22 @@ export default async function FamilyDetailPage({ params }: Props) {
     where: { deletedAt: null, id: { not: id } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
+  });
+
+  const branchTargetFamilies = await db.family.findMany({
+    where: { deletedAt: null, id: { not: id } },
+    select: {
+      id: true,
+      name: true,
+      persons: {
+        where: { deletedAt: null },
+        select: { id: true, fullName: true },
+        orderBy: { fullName: "asc" },
+        take: 100,
+      },
+    },
+    orderBy: { name: "asc" },
+    take: 50,
   });
 
   const personIds = family.persons.map((p) => p.id);
@@ -257,6 +274,20 @@ export default async function FamilyDetailPage({ params }: Props) {
                 isSystemAdmin={isSystemAdmin}
                 links={familyLinks}
                 otherFamilies={otherFamilies}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Branch Unification */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">توحيد فرعين</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BranchUnificationManager
+                currentFamilyId={id}
+                currentPersons={family.persons.map((p) => ({ id: p.id, fullName: p.fullName }))}
+                targetFamilies={branchTargetFamilies}
               />
             </CardContent>
           </Card>

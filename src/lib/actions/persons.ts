@@ -29,7 +29,7 @@ async function canManageFamily(userId: string, familyId: string, isSystemAdmin: 
   return !!assignment;
 }
 
-async function recomputeFamilyAncestry(familyId: string) {
+export async function recomputeFamilyAncestry(familyId: string) {
   const persons = await db.person.findMany({
     where: { familyId, deletedAt: null },
     select: { id: true },

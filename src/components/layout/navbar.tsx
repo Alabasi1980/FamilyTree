@@ -2,10 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { TreePine } from "lucide-react";
-import { withBasePath } from "@/lib/base-path";
 import { PublicSearchForm } from "@/components/search/public-search-form";
-
-const brandIcon = withBasePath("/icons/icon-192x192.png");
 
 const labels = {
   brand: "بستان الأصول",

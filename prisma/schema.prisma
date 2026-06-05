@@ -99,6 +99,25 @@ enum HomelandConfidence {
   UNSPECIFIED
 }
 
+enum BranchUnificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BranchUnificationRelationship {
+  FULL_SIBLINGS
+  PATERNAL_SIBLINGS
+  MATERNAL_SIBLINGS
+}
+
+enum NotificationType {
+  REQUEST_SUBMITTED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  REQUEST_APPLIED
+}
+
 // ===========================
 // CORE MODELS
 // ===========================
@@ -128,6 +147,7 @@ model User {
   adminRequestsSubmitted AdminRequest[]          @relation("AdminRequestSubmitter")
   adminRequestsReviewed  AdminRequest[]          @relation("AdminRequestReviewer")
   shareLinksCreated      ShareLink[]
+  notifications          Notification[]
 
   @@index([email])
   @@index([phone])
@@ -395,6 +415,52 @@ model AdminRequest {
   @@index([status])
   @@index([submittedByUserId])
   @@index([targetFamilyId])
+}
+
+model BranchUnificationRequest {
+  id              String                       @id @default(cuid())
+  sourceFamilyId  String
+  targetFamilyId  String
+  sourcePersonId  String
+  targetPersonId  String
+  relationship    BranchUnificationRelationship
+  sharedFatherName String?
+  sharedMotherName String?
+  notes           String?
+  status          BranchUnificationStatus      @default(PENDING)
+
+  submittedByUserId String
+  sourceApprovedByUserId String?
+  sourceApprovedAt DateTime?
+  targetApprovedByUserId String?
+  targetApprovedAt DateTime?
+  rejectedByUserId String?
+  rejectedAt DateTime?
+  reviewNotes String?
+  appliedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceFamilyId, status])
+  @@index([targetFamilyId, status])
+  @@index([submittedByUserId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  href      String?
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([userId, createdAt])
 }
 
 // ===========================

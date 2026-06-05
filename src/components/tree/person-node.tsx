@@ -71,12 +71,10 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
         bg-card border border-border/40
       `}
     >
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-primary/70 !border-primary/50 !w-2 !h-2"
-        style={{ top: -4 }}
-      />
+      <Handle type="target" position={Position.Top} className="!bg-primary/70 !border-primary/50 !w-2 !h-2" style={{ top: -4 }} />
+      {/* Left/right handles for cross-family marriage bridge edges */}
+      <Handle id="l" type="source" position={Position.Left}  className="!bg-amber-500/60 !border-amber-400/40 !w-1.5 !h-1.5" style={{ left: -3 }} />
+      <Handle id="r" type="source" position={Position.Right} className="!bg-amber-500/60 !border-amber-400/40 !w-1.5 !h-1.5" style={{ right: -3 }} />
 
       <div className={`h-[3px] ${isMale ? "bg-blue-400/70" : "bg-rose-400/70"}`} />
 

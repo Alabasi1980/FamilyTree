@@ -226,71 +226,96 @@ export default async function FamilyPublicPage({ params }: Props) {
       <Navbar />
 
       <main className="flex-1 flex flex-col">
-        {/* Family header */}
-        <div className="border-b border-border/40 bg-card/30 px-4 py-4">
-          <div className="container mx-auto max-w-6xl flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-primary/20 p-2.5">
-                <TreePine className="h-5 w-5 text-accent" />
+        {/* ── Family Header — premium bar ── */}
+        <div className="relative border-b border-border/30 bg-background/95 backdrop-blur-sm">
+          {/* خط مضيء علوي */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+          {/* هالة خلفية خفيفة */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,hsl(145_35%_22%/0.15),transparent)]" />
+
+          <div className="container relative mx-auto max-w-6xl px-4 py-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              {/* اسم العائلة + موطن */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="absolute inset-0 rounded-xl bg-accent/10 blur-sm" />
+                  <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/15 text-base font-bold text-accent">
+                    {family.name[0]}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-lg font-bold text-foreground">
+                      عائلة <span className="text-accent">{family.name}</span>
+                    </h1>
+                    <Badge variant={family.isPublic ? "public" : "private"} className="text-[10px] h-4 px-1.5">
+                      {family.isPublic ? <><Globe className="h-2.5 w-2.5 ml-0.5" />عامة</> : <><Lock className="h-2.5 w-2.5 ml-0.5" />خاصة</>}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2.5 mt-0.5 flex-wrap">
+                    {homeland && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3 text-accent/60" />
+                        {homeland}
+                      </span>
+                    )}
+                    {family.originSummary && (
+                      <span className="hidden md:block text-xs text-muted-foreground/60 truncate max-w-xs">
+                        {family.originSummary}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">عائلة {family.name}</h1>
-                {family.originSummary && (
-                  <p className="text-sm text-muted-foreground mt-0.5 max-w-md line-clamp-1">
-                    {family.originSummary}
-                  </p>
-                )}
-                {homeland && (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5 text-accent/70" />
-                    {homeland}
-                  </p>
+
+              {/* Actions + stats */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-card/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5 text-accent/70" />
+                  <span className="font-semibold text-foreground">{family._count.persons}</span> فرد
+                </div>
+                {isFamilyAdmin && (
+                  <Link
+                    href={`/dashboard/families/${family.id}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-card/50 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-border/70 transition-all"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">إدارة</span>
+                  </Link>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Users className="h-4 w-4" />
-                {family._count.persons} فرد
-              </span>
-              <Badge variant={family.isPublic ? "public" : "private"}>
-                {family.isPublic ? <><Globe className="h-3 w-3 ml-1" />عامة</> : <><Lock className="h-3 w-3 ml-1" />خاصة</>}
-              </Badge>
-              {isFamilyAdmin && (
-                <Link
-                  href={`/dashboard/families/${family.id}`}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  إدارة
-                </Link>
-              )}
-            </div>
+
+            {/* روابط العائلات */}
+            {(familyLinks.length > 0 || (isFamilyAdmin && allFamilies.length > 0)) && (
+              <div className="mt-2 pt-2 border-t border-border/20">
+                <FamilyLinksSection
+                  currentFamilyId={family.id}
+                  familyLinks={familyLinks}
+                  allFamilies={allFamilies}
+                  canManage={isFamilyAdmin}
+                />
+              </div>
+            )}
           </div>
-          {(familyLinks.length > 0 || (isFamilyAdmin && allFamilies.length > 0)) && (
-            <div className="container mx-auto max-w-6xl mt-2">
-              <FamilyLinksSection
-                currentFamilyId={family.id}
-                familyLinks={familyLinks}
-                allFamilies={allFamilies}
-                canManage={isFamilyAdmin}
-              />
-            </div>
-          )}
         </div>
 
-        {/* Tree */}
+        {/* ── Tree Canvas ── */}
         <div className="relative tree-viewport">
           {personsForTree.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-24 text-muted-foreground gap-3">
-              <TreePine className="h-16 w-16 opacity-30" />
-              <p>لا يوجد أفراد مرئيون في هذه العائلة</p>
+            <div className="flex flex-col items-center justify-center h-full py-24 text-muted-foreground gap-4">
+              <div className="flex items-end gap-1 opacity-20">
+                <TreePine className="h-8 w-8" />
+                <TreePine className="h-14 w-14" />
+                <TreePine className="h-8 w-8" />
+              </div>
+              <p className="text-base">لا يوجد أفراد مرئيون في هذه العائلة</p>
               {isFamilyAdmin && (
                 <Link
-                  href={`/dashboard/families/${family.id}`}
-                  className="text-sm text-primary hover:underline"
+                  href={`/dashboard/families/${family.id}/add-person`}
+                  className="text-sm text-accent hover:underline"
                 >
-                  إدارة العائلة وإضافة أفراد
+                  ابدأ بإضافة أول فرد
                 </Link>
               )}
             </div>
@@ -301,8 +326,10 @@ export default async function FamilyPublicPage({ params }: Props) {
               marriages={marriagesForTree}
               canManage={isFamilyAdmin}
               familyId={family.id}
+              familySlug={family.slug}
               linkedPersons={linkedPersonsForTree}
               linkedFamilies={linkedFamiliesForPanel}
+              hasLinkedFamilies={familyLinks.length > 0}
             />
           )}
         </div>

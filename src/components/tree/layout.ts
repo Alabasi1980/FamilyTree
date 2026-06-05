@@ -1,0 +1,96 @@
+// ─── Shared tree layout utilities ────────────────────────────────────────────
+// Used by both the single-family tree (family-tree.tsx) and the multi-family
+// network canvas (family-network.tsx). Kept free of React / component imports.
+
+export const NODE_W = 180;
+export const NODE_H = 88;
+export const GAP_X  = 56;
+export const GAP_Y  = 160;
+
+// Minimal structural types so this module stays import-free of components
+export interface LayoutPerson  { id: string }
+export interface LayoutRelation { parentId: string; childId: string }
+
+export interface LayoutBounds {
+  minX: number; minY: number;
+  maxX: number; maxY: number;
+  width: number; height: number;
+}
+
+// Generation-aware top-down tree layout.
+// Identical to the original private function in family-tree.tsx.
+export function buildLayout(
+  persons: LayoutPerson[],
+  relations: LayoutRelation[]
+): Map<string, { x: number; y: number }> {
+  if (persons.length === 0) return new Map();
+
+  const childrenMap = new Map<string, string[]>();
+  const parentMap   = new Map<string, string[]>();
+
+  persons.forEach((p) => { childrenMap.set(p.id, []); parentMap.set(p.id, []); });
+  relations.forEach(({ parentId, childId }) => {
+    childrenMap.get(parentId)?.push(childId);
+    parentMap.get(childId)?.push(parentId);
+  });
+
+  // BFS — assign generation depth from roots
+  const depth = new Map<string, number>();
+  const queue: Array<{ id: string; d: number }> = persons
+    .filter((p) => (parentMap.get(p.id)?.length ?? 0) === 0)
+    .map((p) => ({ id: p.id, d: 0 }));
+
+  while (queue.length > 0) {
+    const item = queue.shift()!;
+    if (depth.has(item.id)) continue;
+    depth.set(item.id, item.d);
+    childrenMap.get(item.id)?.forEach((c) => queue.push({ id: c, d: item.d + 1 }));
+  }
+  persons.forEach((p) => { if (!depth.has(p.id)) depth.set(p.id, 0); });
+
+  const positions = new Map<string, { x: number; y: number }>();
+  let leafCounter = 0;
+
+  function place(id: string): number {
+    if (positions.has(id)) return positions.get(id)!.x;
+    const d        = depth.get(id) ?? 0;
+    const children = childrenMap.get(id) ?? [];
+
+    if (children.length === 0) {
+      const x = leafCounter * (NODE_W + GAP_X);
+      leafCounter++;
+      positions.set(id, { x, y: d * GAP_Y });
+      return x;
+    }
+
+    const xs = children.map((c) => place(c));
+    const x  = (xs[0] + xs[xs.length - 1]) / 2;
+    positions.set(id, { x, y: d * GAP_Y });
+    return x;
+  }
+
+  persons.filter((p) => (parentMap.get(p.id)?.length ?? 0) === 0).forEach((r) => place(r.id));
+  persons.forEach((p) => {
+    if (!positions.has(p.id)) {
+      positions.set(p.id, { x: leafCounter * (NODE_W + GAP_X), y: 0 });
+      leafCounter++;
+    }
+  });
+
+  return positions;
+}
+
+// Bounding box of a layout result (accounts for node footprint).
+export function layoutBounds(positions: Map<string, { x: number; y: number }>): LayoutBounds {
+  if (positions.size === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  positions.forEach(({ x, y }) => {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x + NODE_W > maxX) maxX = x + NODE_W;
+    if (y + NODE_H > maxY) maxY = y + NODE_H;
+  });
+
+  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+}

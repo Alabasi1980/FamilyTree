@@ -5,15 +5,8 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import {
-  TreePine,
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  Settings,
-  LogOut,
-  Shield,
-  Menu,
-  X,
+  TreePine, LayoutDashboard, Users, ClipboardList,
+  Settings, LogOut, Shield, Menu, X, Globe, Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { withBasePath } from "@/lib/base-path";
@@ -26,33 +19,94 @@ interface SidebarUser {
   accountType: AccountType;
 }
 
-const navItems = [
+// ── Nav structure ─────────────────────────────────────────────────────────────
+
+const primaryNav = [
   { href: "/dashboard", label: "الرئيسية", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/families", label: "العائلات", icon: TreePine },
-  { href: "/dashboard/requests", label: "الطلبات", icon: ClipboardList },
 ];
 
-const adminNavItems = [
+const homelandNav = [
+  { href: "/", label: "حديقة المواطن", icon: Globe, exact: true },
+];
+
+const familyNav = [
+  { href: "/dashboard/families", label: "عائلاتي", icon: TreePine, exact: false },
+  { href: "/dashboard/requests", label: "الطلبات", icon: ClipboardList, exact: false },
+  { href: "/dashboard/notifications", label: "التنبيهات", icon: Bell, exact: false },
+];
+
+const adminNav = [
   { href: "/admin", label: "لوحة الإدارة", icon: Shield, exact: true },
-  { href: "/admin/users", label: "المستخدمون", icon: Users },
-  { href: "/admin/families", label: "كل العائلات", icon: TreePine },
+  { href: "/admin/users", label: "المستخدمون", icon: Users, exact: false },
+  { href: "/admin/families", label: "كل العائلات", icon: TreePine, exact: false },
 ];
 
-export function DashboardSidebar({ user }: { user: SidebarUser }) {
+// ── Shared nav link ──────────────────────────────────────────────────────────
+
+function NavLink({
+  href, label, icon: Icon, isActive, badgeCount, onClick,
+}: {
+  href: string; label: string; icon: React.ElementType;
+  isActive: boolean; badgeCount?: number; onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={cn(
+        "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150",
+        isActive
+          ? "bg-primary/20 text-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+      )}
+    >
+      {isActive && (
+        <span className="absolute inset-y-1 right-0 w-0.5 rounded-full bg-accent" />
+      )}
+      <Icon className={cn("h-4 w-4 shrink-0 transition-colors", isActive ? "text-accent" : "group-hover:text-foreground/80")} />
+      {label}
+      {!!badgeCount && (
+        <span className="mr-auto inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-foreground">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+// ── Section label ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 px-2 pt-3 pb-1">
+      <div className="h-px flex-1 bg-border/50" />
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+        {children}
+      </span>
+      <div className="h-px flex-1 bg-border/50" />
+    </div>
+  );
+}
+
+// ── Main sidebar ──────────────────────────────────────────────────────────────
+
+export function DashboardSidebar({ user, unreadNotifications = 0 }: { user: SidebarUser; unreadNotifications?: number }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
 
+  const close = () => setIsOpen(false);
+
   return (
     <>
+      {/* Mobile toggle */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
         className="fixed right-3 top-3 z-40 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-card/95 text-foreground shadow-lg shadow-black/20 backdrop-blur md:hidden"
         aria-label="فتح القائمة"
-        aria-expanded={isOpen}
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -60,7 +114,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
       {isOpen && (
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
+          onClick={close}
           className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm md:hidden"
           aria-label="إغلاق القائمة"
         />
@@ -68,95 +122,109 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-dvh w-72 flex-col border-l border-border/40 bg-card shadow-2xl shadow-black/30 transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-56 md:translate-x-0 md:bg-card/30 md:shadow-none",
+          "fixed inset-y-0 right-0 z-50 flex h-dvh w-72 flex-col transition-transform duration-200",
+          "border-l border-border/30 bg-card shadow-2xl shadow-black/40",
+          "md:sticky md:top-0 md:z-auto md:h-screen md:w-56 md:translate-x-0 md:bg-card/20 md:shadow-none md:backdrop-blur-sm",
           isOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-      {/* Logo */}
-      <div className="flex items-center justify-between gap-3 p-4 border-b border-border/40">
-        <Link href="/" onClick={() => setIsOpen(false)} className="flex items-center gap-2 group">
-          <TreePine className="h-5 w-5 text-accent" />
-          <span className="font-semibold text-sm text-foreground">بستان الأصول</span>
-        </Link>
-        <button
-          type="button"
-          onClick={() => setIsOpen(false)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground md:hidden"
-          aria-label="إغلاق القائمة"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+        {/* خط علوي مضيء */}
+        <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
 
-      {/* User info */}
-      <div className="px-4 py-3 border-b border-border/40">
-        <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
-        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        <p className="text-xs text-muted-foreground px-2 mb-2 font-medium">القائمة</p>
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setIsOpen(false)}
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-              isActive(item.href, item.exact)
-                ? "bg-primary/20 text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            {item.label}
-          </Link>
-        ))}
-
-        {user.accountType === "SYSTEM_ADMIN" && (
-          <>
-            <div className="pt-3 pb-1">
-              <p className="text-xs text-muted-foreground px-2 font-medium">إدارة النظام</p>
+        {/* Brand */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/30">
+          <Link href="/" onClick={close} className="group flex items-center gap-2.5">
+            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg border border-accent/25 bg-background/50">
+              <TreePine className="h-3.5 w-3.5 text-accent" />
+              <div className="absolute inset-0 rounded-lg bg-accent/10 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            {adminNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                  isActive(item.href, item.exact)
-                    ? "bg-primary/20 text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </Link>
-            ))}
-          </>
-        )}
-      </nav>
+            <span className="text-sm font-bold text-foreground">
+              بستان <span className="text-accent">الأصول</span>
+            </span>
+          </Link>
+          <button
+            type="button" onClick={close}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground md:hidden"
+            aria-label="إغلاق"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-      {/* Footer actions */}
-      <div className="p-3 border-t border-border/40 space-y-1">
-        <Link
-          href="/dashboard/settings"
-          onClick={() => setIsOpen(false)}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          الإعدادات
-        </Link>
-        <button
-          onClick={() => signOut({ callbackUrl: withBasePath("/") })}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          خروج
-        </button>
-      </div>
+        {/* User chip */}
+        <div className="px-3 py-2.5 border-b border-border/30">
+          <div className="flex items-center gap-2.5 rounded-lg bg-background/30 px-2.5 py-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/25 text-xs font-bold text-accent border border-primary/20">
+              {(user.name ?? user.email ?? "؟")[0].toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground truncate">{user.name ?? user.email}</p>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {user.accountType === "SYSTEM_ADMIN" ? "مدير النظام" : "مسؤول عائلة"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-2.5 py-2 space-y-0.5">
+
+          {/* الرئيسية */}
+          {primaryNav.map((item) => (
+            <NavLink key={item.href} {...item} isActive={isActive(item.href, item.exact)} onClick={close} />
+          ))}
+
+          {/* المواطن */}
+          <SectionLabel>المواطن</SectionLabel>
+          {homelandNav.map((item) => (
+            <NavLink key={item.href} {...item} isActive={isActive(item.href, item.exact)} onClick={close} />
+          ))}
+
+          {/* العائلات */}
+          <SectionLabel>العائلات</SectionLabel>
+          {familyNav.map((item) => (
+            <NavLink
+              key={item.href}
+              {...item}
+              badgeCount={item.href === "/dashboard/notifications" ? unreadNotifications : undefined}
+              isActive={isActive(item.href, item.exact)}
+              onClick={close}
+            />
+          ))}
+
+          {/* إدارة النظام */}
+          {user.accountType === "SYSTEM_ADMIN" && (
+            <>
+              <SectionLabel>إدارة النظام</SectionLabel>
+              {adminNav.map((item) => (
+                <NavLink key={item.href} {...item} isActive={isActive(item.href, item.exact)} onClick={close} />
+              ))}
+            </>
+          )}
+        </nav>
+
+        {/* Footer */}
+        <div className="border-t border-border/30 px-2.5 py-2 space-y-0.5">
+          <Link
+            href="/dashboard/settings"
+            onClick={close}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+            الإعدادات
+          </Link>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: withBasePath("/") })}
+            className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            خروج
+          </button>
+        </div>
+
+        {/* خط سفلي */}
+        <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
       </aside>
     </>
   );
