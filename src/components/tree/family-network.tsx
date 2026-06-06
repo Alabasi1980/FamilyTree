@@ -9,7 +9,6 @@ import {
   type Node, type Edge, BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useRouter } from "next/navigation";
 import { PersonNode } from "./person-node";
 import { PersonSidebar, type PersonData } from "./person-sidebar";
 import {
@@ -17,7 +16,7 @@ import {
   type ZoneBackgroundData, type FamilyHeaderData,
 } from "./zone-nodes";
 import { NetworkControls, type EdgeFilterState } from "./network-controls";
-import { buildNetworkLayout, ZONE_BORDER_COLORS, ZONE_COLORS } from "./network-layout";
+import { buildNetworkLayout, ZONE_BORDER_COLORS } from "./network-layout";
 import type {
   FamilyNetworkResult, NetworkMarriage, NetworkPerson,
 } from "@/lib/network/get-family-network";
@@ -93,9 +92,8 @@ export interface FamilyNetworkProps extends FamilyNetworkResult {
 
 export function FamilyNetwork({
   rootFamilyId, truncated, families, persons, parentChildRelations,
-  marriages, familyLinks, canManage, familySlug, onExpandFamily,
+  marriages, familyLinks, canManage, onExpandFamily,
 }: FamilyNetworkProps) {
-  const router = useRouter();
   const [hiddenFamilyIds, setHiddenFamilyIds] = useState<Set<string>>(new Set());
   const [focusPersonId, setFocusPersonId] = useState<string | null>(null);
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null);
@@ -164,7 +162,7 @@ export function FamilyNetwork({
   const buildNodes = useCallback((): AnyNode[] => {
     const out: AnyNode[] = [];
 
-    zones.forEach((zone, zi) => {
+    zones.forEach((zone) => {
       const fam = families.find((f) => f.id === zone.familyId);
       if (!fam) return;
       const colorIdx = zone.colorIndex;
@@ -378,7 +376,12 @@ export function FamilyNetwork({
             focusPersonId={focusPersonId}
             truncated={truncated}
             expandableFamilyIds={expandableFamilyIds}
-            onToggleFamily={(id) => setHiddenFamilyIds((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; })}
+            onToggleFamily={(id) => setHiddenFamilyIds((prev) => {
+              const s = new Set(prev);
+              if (s.has(id)) s.delete(id);
+              else s.add(id);
+              return s;
+            })}
             onEdgeFilterChange={(k, v) => setEdgeFilter((prev) => ({ ...prev, [k]: v }))}
             onClearFocus={() => setFocusPersonId(null)}
             onExpandFamily={onExpandFamily}

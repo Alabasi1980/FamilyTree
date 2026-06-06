@@ -3,7 +3,7 @@
 // then arranges zones on a 2D canvas so marriage-connected families sit
 // adjacent (short bridge edges) and all zones are non-overlapping.
 
-import { buildLayout, layoutBounds, NODE_W, NODE_H, GAP_X, GAP_Y } from "./layout";
+import { buildLayout, layoutBounds, NODE_W, NODE_H } from "./layout";
 import type { NetworkPerson, NetworkRelation, NetworkMarriage } from "@/lib/network/get-family-network";
 
 // ─── Zone geometry ────────────────────────────────────────────────────────────

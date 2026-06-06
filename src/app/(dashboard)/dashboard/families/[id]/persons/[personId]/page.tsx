@@ -34,9 +34,15 @@ function formatDate(date: Date | null) {
   }).format(date);
 }
 
-function yearsRange(birthDate: Date | null, deathDate: Date | null, isLiving: boolean) {
-  const birthYear = birthDate?.getFullYear();
-  const deathYear = deathDate?.getFullYear();
+function yearsRange(
+  birthYearValue: number | null,
+  birthDate: Date | null,
+  deathYearValue: number | null,
+  deathDate: Date | null,
+  isLiving: boolean
+) {
+  const birthYear = birthYearValue ?? birthDate?.getFullYear();
+  const deathYear = deathYearValue ?? deathDate?.getFullYear();
   if (!birthYear && !deathYear) return null;
   if (birthYear && deathYear) return `${birthYear} - ${deathYear}`;
   if (birthYear && isLiving) return `مواليد ${birthYear}`;
@@ -66,12 +72,21 @@ export default async function PersonProfilePage({ params }: Props) {
       select: {
         id: true,
         fullName: true,
+        kunya: true,
         gender: true,
         isLiving: true,
+        birthYear: true,
         birthDate: true,
+        birthPlace: true,
+        deathYear: true,
         deathDate: true,
+        bloodType: true,
+        residenceCity: true,
+        address: true,
+        profession: true,
         biography: true,
         notes: true,
+        photoUrl: true,
         visibilityLevel: true,
         parentRelations: {
           where: { parent: { deletedAt: null } },
@@ -174,7 +189,13 @@ export default async function PersonProfilePage({ params }: Props) {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <InfoRow label="الميلاد" value={formatDate(person.birthDate)} />
                 <InfoRow label="الوفاة" value={formatDate(person.deathDate)} />
-                <InfoRow label="السنوات" value={yearsRange(person.birthDate, person.deathDate, person.isLiving)} />
+                <InfoRow label="السنوات" value={yearsRange(person.birthYear, person.birthDate, person.deathYear, person.deathDate, person.isLiving)} />
+                <InfoRow label="الكنية" value={person.kunya} />
+                <InfoRow label="مكان الميلاد" value={person.birthPlace} />
+                <InfoRow label="فصيلة الدم" value={person.bloodType} />
+                <InfoRow label="المهنة" value={person.profession} />
+                <InfoRow label="المدينة الحالية" value={person.residenceCity} />
+                <InfoRow label="العنوان" value={person.address} />
               </div>
 
               {person.biography ? (

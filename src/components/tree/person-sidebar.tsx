@@ -13,6 +13,7 @@ import {
   Link2,
 } from "lucide-react";
 import Link from "next/link";
+import { LinkPersonButton } from "@/components/tree/link-person-button";
 import {
   createPersonAsChildOf,
   createPersonAsParentOf,
@@ -28,10 +29,19 @@ import { computeMahramIds } from "@/lib/mahram";
 export interface PersonData {
   id: string;
   fullName: string;
+  kunya?: string | null;
   gender: "MALE" | "FEMALE";
   isLiving: boolean;
+  birthYear?: number | null;
   birthDate: string | null;
+  birthPlace?: string | null;
+  deathYear?: number | null;
   deathDate: string | null;
+  bloodType?: string | null;
+  residenceCity?: string | null;
+  address?: string | null;
+  profession?: string | null;
+  photoUrl?: string | null;
   biography?: string | null;
   notes?: string | null;
   /** Set only for persons from a linked (non-current) family */
@@ -59,6 +69,10 @@ interface Props {
   relations: Relation[];
   marriages: Marriage[];
   canManage: boolean;
+  /** True when the viewer is logged in (even if not admin — can suggest edits) */
+  isLoggedIn?: boolean;
+  /** linkedPersonId of the current user — if set, "هذا أنا" button is hidden */
+  userLinkedPersonId?: string | null;
   familyId: string;
   onClose: () => void;
   onPersonSelect: (personId: string) => void;
@@ -194,6 +208,16 @@ function RelationForm({
 
 // ─── Person row (inside relatives list) ──────────────────────────────────────
 
+function SidebarInfoRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span className="shrink-0 text-muted-foreground">{label}:</span>
+      <span className="truncate text-right text-foreground/85">{value}</span>
+    </div>
+  );
+}
+
 function PersonRow({
   person,
   onSelect,
@@ -248,6 +272,8 @@ export function PersonSidebar({
   relations,
   marriages,
   canManage,
+  isLoggedIn = false,
+  userLinkedPersonId = null,
   familyId,
   onClose,
   onPersonSelect,
@@ -309,8 +335,8 @@ export function PersonSidebar({
   );
 
   // ── Dates & age ─────────────────────────────────────────────────────────────
-  const birthYear = person.birthDate ? new Date(person.birthDate).getFullYear() : null;
-  const deathYear = person.deathDate ? new Date(person.deathDate).getFullYear() : null;
+  const birthYear = person.birthYear ?? (person.birthDate ? new Date(person.birthDate).getFullYear() : null);
+  const deathYear = person.deathYear ?? (person.deathDate ? new Date(person.deathDate).getFullYear() : null);
   const age =
     birthYear && deathYear
       ? deathYear - birthYear
@@ -398,18 +424,28 @@ export function PersonSidebar({
         }`}
       >
         <div
-          className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+          className={`w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold shrink-0 ${
             isMale ? "bg-blue-500/20 text-blue-400" : "bg-rose-400/20 text-rose-400"
           }`}
         >
-          {person.fullName
-            .split(" ")
-            .map((w) => w[0])
-            .slice(0, 2)
-            .join("")}
+          {person.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={person.photoUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            person.fullName
+              .split(" ")
+              .map((w) => w[0])
+              .slice(0, 2)
+              .join("")
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-sm text-foreground truncate">{person.fullName}</h3>
+          {(person.kunya || person.profession) && (
+            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              {[person.kunya, person.profession].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <p className="text-[10px] text-muted-foreground">
             {isMale ? "ذكر" : "أنثى"}
             {age !== null && ` · ${age} سنة`}
@@ -441,6 +477,9 @@ export function PersonSidebar({
 
         {/* ── Basic info ── */}
         <div className="space-y-1.5">
+          {birthYear && !person.birthDate && (
+            <SidebarInfoRow label="سنة الميلاد" value={String(birthYear)} />
+          )}
           {person.birthDate && (
             <div className="flex items-center justify-between text-xs gap-2">
               <span className="text-muted-foreground shrink-0">المواليد:</span>
@@ -452,6 +491,9 @@ export function PersonSidebar({
                 })}
               </span>
             </div>
+          )}
+          {deathYear && !person.deathDate && (
+            <SidebarInfoRow label="سنة الوفاة" value={String(deathYear)} />
           )}
           {person.deathDate && (
             <div className="flex items-center justify-between text-xs gap-2">
@@ -465,6 +507,10 @@ export function PersonSidebar({
               </span>
             </div>
           )}
+          <SidebarInfoRow label="مكان الميلاد" value={person.birthPlace} />
+          <SidebarInfoRow label="المدينة الحالية" value={person.residenceCity} />
+          <SidebarInfoRow label="فصيلة الدم" value={person.bloodType} />
+          <SidebarInfoRow label="العنوان" value={person.address} />
           {person.biography && (
             <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/30 pt-2 mt-2">
               {person.biography}
@@ -476,6 +522,21 @@ export function PersonSidebar({
         </div>
 
         {/* ── Actions ── */}
+        {/* زر "هذا أنا" للمستخدمين المسجّلين غير المرتبطين */}
+        {isLoggedIn && !userLinkedPersonId && (
+          <LinkPersonButton personId={person.id} />
+        )}
+
+        {/* زر اقتراح تعديل للأعضاء المسجّلين غير المسؤولين */}
+        {isLoggedIn && !canManage && (
+          <Link
+            href={`/dashboard/families/${familyId}/persons/${person.id}/edit`}
+            className="w-full flex items-center justify-center gap-1.5 text-xs py-1.5 px-3 rounded-lg border border-accent/25 bg-accent/5 hover:bg-accent/10 text-accent/80 hover:text-accent transition-colors mb-1"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+            اقترح تعديل
+          </Link>
+        )}
         {canManage && (
           <div className="flex gap-2">
             <Link

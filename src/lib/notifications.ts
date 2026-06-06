@@ -46,3 +46,7 @@ export async function getUnreadNotificationCount(userId: string) {
     where: { userId, readAt: null },
   });
 }
+
+export function requestFocusHref(requestId: string) {
+  return `/dashboard/requests?focus=${requestId}#request-${requestId}`;
+}

@@ -3,7 +3,16 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { addParentChildRelation, removeParentChildRelation } from "@/lib/actions/persons";
+import { applyUserPersonLink } from "@/lib/actions/linking";
+import {
+  createNotifications,
+  getActiveFamilyAdminUserIds,
+  getSystemAdminUserIds,
+  requestFocusHref,
+} from "@/lib/notifications";
+import { getHomelandPlacePathFields } from "@/lib/actions/homelands";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -25,14 +34,31 @@ function makeSlug(name: string) {
 
 type PersonEditPayload = {
   fullName: string;
+  kunya?: string | null;
   gender: "MALE" | "FEMALE";
   isLiving: boolean;
+  birthYear?: number | null;
   birthDate?: string;
+  birthPlace?: string | null;
+  deathYear?: number | null;
   deathDate?: string;
+  bloodType?: string | null;
+  residenceCity?: string | null;
+  address?: string | null;
+  profession?: string | null;
   biography?: string;
   notes?: string;
+  photoUrl?: string | null;
   visibilityLevel: "PUBLIC" | "MEMBER" | "ADMIN" | "SHARED_LINK";
 };
+
+function defaultVisibilityForGender(gender: "MALE" | "FEMALE") {
+  return gender === "FEMALE" ? "ADMIN" : "PUBLIC";
+}
+
+function personLivingState(payload: PersonEditPayload) {
+  return payload.deathYear || payload.deathDate ? false : payload.isLiving ?? true;
+}
 
 type RelationPayload = {
   parentId?: string;
@@ -49,7 +75,21 @@ type FamilyInfoPayload = {
   homelandCity?: string;
   homelandNote?: string;
   homelandConfidence?: "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED";
+  homelandPlaceId?: string | null;
   isPublic?: boolean;
+};
+
+const joinFamilyAdminRequestSchema = z.object({
+  applicantRelationship: z.string().trim().min(2, "اكتب صلتك بالعائلة").max(120),
+  applicantMessage: z.string().trim().min(20, "اكتب سبب الطلب بتفصيل كاف").max(1000),
+  applicantContactEmail: z.string().trim().max(120).optional(),
+  applicantContactPhone: z.string().trim().max(40).optional(),
+});
+
+const notificationLabels = {
+  adminSubmitted: "طلب إدارة عائلة جديد",
+  approved: "تمت الموافقة على طلبك",
+  rejected: "تم رفض طلبك",
 };
 
 async function applyEditRequest(req: {
@@ -64,13 +104,22 @@ async function applyEditRequest(req: {
       data: {
         familyId: req.familyId,
         fullName: payload.fullName,
+        kunya: payload.kunya ?? null,
         gender: payload.gender,
-        isLiving: payload.isLiving ?? true,
+        isLiving: personLivingState(payload),
+        birthYear: payload.birthYear ?? (payload.birthDate ? new Date(payload.birthDate).getFullYear() : null),
         birthDate: payload.birthDate ? new Date(payload.birthDate) : null,
+        birthPlace: payload.birthPlace ?? null,
+        deathYear: payload.deathYear ?? (payload.deathDate ? new Date(payload.deathDate).getFullYear() : null),
         deathDate: payload.deathDate ? new Date(payload.deathDate) : null,
+        bloodType: payload.bloodType ?? null,
+        residenceCity: payload.residenceCity ?? null,
+        address: payload.address ?? null,
+        profession: payload.profession ?? null,
         biography: payload.biography ?? null,
         notes: payload.notes ?? null,
-        visibilityLevel: payload.visibilityLevel ?? "PUBLIC",
+        photoUrl: payload.photoUrl ?? null,
+        visibilityLevel: payload.visibilityLevel ?? defaultVisibilityForGender(payload.gender),
       },
     });
     await db.personAncestry.create({
@@ -86,13 +135,22 @@ async function applyEditRequest(req: {
       where: { id: req.targetId, familyId: req.familyId, deletedAt: null },
       data: {
         fullName: payload.fullName,
+        kunya: payload.kunya ?? null,
         gender: payload.gender,
-        isLiving: payload.isLiving ?? true,
+        isLiving: personLivingState(payload),
+        birthYear: payload.birthYear ?? (payload.birthDate ? new Date(payload.birthDate).getFullYear() : null),
         birthDate: payload.birthDate ? new Date(payload.birthDate) : null,
+        birthPlace: payload.birthPlace ?? null,
+        deathYear: payload.deathYear ?? (payload.deathDate ? new Date(payload.deathDate).getFullYear() : null),
         deathDate: payload.deathDate ? new Date(payload.deathDate) : null,
+        bloodType: payload.bloodType ?? null,
+        residenceCity: payload.residenceCity ?? null,
+        address: payload.address ?? null,
+        profession: payload.profession ?? null,
         biography: payload.biography ?? null,
         notes: payload.notes ?? null,
-        visibilityLevel: payload.visibilityLevel ?? "PUBLIC",
+        photoUrl: payload.photoUrl ?? null,
+        visibilityLevel: payload.visibilityLevel ?? defaultVisibilityForGender(payload.gender),
       },
     });
     return;
@@ -118,15 +176,28 @@ async function applyEditRequest(req: {
 
   if (req.requestType === "ADD_FAMILY_INFO" || req.requestType === "EDIT_FAMILY_INFO") {
     const payload = req.payloadJson as FamilyInfoPayload;
+    const selectedHomeland =
+      payload.homelandPlaceId !== undefined && payload.homelandPlaceId
+        ? await getHomelandPlacePathFields(payload.homelandPlaceId)
+        : null;
     await db.family.update({
       where: { id: req.familyId },
       data: {
         ...(payload.name ? { name: payload.name } : {}),
         ...(payload.originSummary !== undefined ? { originSummary: payload.originSummary } : {}),
         ...(payload.historicalNotes !== undefined ? { historicalNotes: payload.historicalNotes } : {}),
-        ...(payload.homelandCountry !== undefined ? { homelandCountry: payload.homelandCountry } : {}),
-        ...(payload.homelandRegion !== undefined ? { homelandRegion: payload.homelandRegion } : {}),
-        ...(payload.homelandCity !== undefined ? { homelandCity: payload.homelandCity } : {}),
+        ...(payload.homelandPlaceId !== undefined
+          ? {
+              homelandPlaceId: selectedHomeland?.homelandPlaceId ?? null,
+              homelandCountry: selectedHomeland?.homelandCountry ?? payload.homelandCountry ?? null,
+              homelandRegion: selectedHomeland?.homelandRegion ?? payload.homelandRegion ?? null,
+              homelandCity: selectedHomeland?.homelandCity ?? payload.homelandCity ?? null,
+            }
+          : {
+              ...(payload.homelandCountry !== undefined ? { homelandCountry: payload.homelandCountry } : {}),
+              ...(payload.homelandRegion !== undefined ? { homelandRegion: payload.homelandRegion } : {}),
+              ...(payload.homelandCity !== undefined ? { homelandCity: payload.homelandCity } : {}),
+            }),
         ...(payload.homelandNote !== undefined ? { homelandNote: payload.homelandNote } : {}),
         ...(payload.homelandConfidence !== undefined ? { homelandConfidence: payload.homelandConfidence } : {}),
         ...(payload.isPublic !== undefined ? { isPublic: payload.isPublic } : {}),
@@ -156,7 +227,14 @@ export async function reviewRequest(
   if (type === "edit") {
     const req = await db.editRequest.findUnique({
       where: { id: requestId },
-      select: { familyId: true, requestType: true, targetId: true, payloadJson: true, status: true },
+      select: {
+        familyId: true,
+        requestType: true,
+        targetId: true,
+        payloadJson: true,
+        status: true,
+        submittedByUserId: true,
+      },
     });
     if (!req) return { success: false, error: "الطلب غير موجود" };
     if (req.status !== "PENDING") return { success: false, error: "تمت مراجعة هذا الطلب مسبقاً" };
@@ -180,6 +258,17 @@ export async function reviewRequest(
       where: { id: requestId },
       data: { status, reviewedByUserId: userId, reviewNotes },
     });
+
+    // Only notify logged-in members (guest submissions have no userId to notify)
+    if (req.submittedByUserId && req.submittedByUserId !== userId) {
+      await createNotifications([req.submittedByUserId], {
+        type: approve ? "REQUEST_APPROVED" : "REQUEST_REJECTED",
+        title: approve ? notificationLabels.approved : notificationLabels.rejected,
+        body: reviewNotes,
+        href: requestFocusHref(requestId),
+        metadata: { requestId, requestType: req.requestType, familyId: req.familyId },
+      });
+    }
   } else {
     const req = await db.adminRequest.findUnique({
       where: { id: requestId },
@@ -187,6 +276,7 @@ export async function reviewRequest(
         requestType: true,
         status: true,
         targetFamilyId: true,
+        targetPersonId: true,
         submittedByUserId: true,
         proposedFamilyName: true,
         proposedHomelandCountry: true,
@@ -194,6 +284,7 @@ export async function reviewRequest(
         proposedHomelandCity: true,
         proposedHomelandNote: true,
         proposedHomelandConfidence: true,
+        proposedHomelandPlaceId: true,
       },
     });
     if (!req) return { success: false, error: "الطلب غير موجود" };
@@ -204,6 +295,12 @@ export async function reviewRequest(
       if (!isSystemAdmin)
         return { success: false, error: "فقط مدير النظام يمكنه مراجعة طلبات إنشاء العائلات" };
     } else if (req.requestType === "JOIN_FAMILY_ADMINS") {
+      if (!isSystemAdmin) {
+        if (!req.targetFamilyId) return { success: false, error: "لا توجد عائلة محددة في الطلب" };
+        if (!(await isActiveFamilyAdmin(userId, req.targetFamilyId)))
+          return { success: false, error: "غير مصرح لك بمراجعة هذا الطلب" };
+      }
+    } else if (req.requestType === "LINK_USER_TO_PERSON") {
       if (!isSystemAdmin) {
         if (!req.targetFamilyId) return { success: false, error: "لا توجد عائلة محددة في الطلب" };
         if (!(await isActiveFamilyAdmin(userId, req.targetFamilyId)))
@@ -222,6 +319,8 @@ export async function reviewRequest(
         decisionType: approve
           ? req.requestType === "CREATE_FAMILY_AND_ADMINISTER"
             ? "APPROVE_NEW_FAMILY_ADMIN"
+            : req.requestType === "LINK_USER_TO_PERSON"
+            ? "APPROVE_JOIN_EXISTING_ADMINS"
             : "APPROVE_JOIN_EXISTING_ADMINS"
           : "REJECT",
       },
@@ -243,6 +342,7 @@ export async function reviewRequest(
             homelandCity: updated.proposedHomelandCity,
             homelandNote: updated.proposedHomelandNote,
             homelandConfidence: updated.proposedHomelandConfidence ?? "UNSPECIFIED",
+            homelandPlaceId: updated.proposedHomelandPlaceId,
             adminAssignments: {
               create: { userId: updated.submittedByUserId, assignedByUserId: userId },
             },
@@ -265,10 +365,27 @@ export async function reviewRequest(
           });
         }
       }
+
+      if (updated.requestType === "LINK_USER_TO_PERSON" && updated.targetPersonId) {
+        await applyUserPersonLink(updated.submittedByUserId, updated.targetPersonId);
+      }
     }
+
+    await createNotifications([updated.submittedByUserId].filter((id) => id !== userId), {
+      type: approve ? "REQUEST_APPROVED" : "REQUEST_REJECTED",
+      title: approve ? notificationLabels.approved : notificationLabels.rejected,
+      body: reviewNotes,
+      href: requestFocusHref(requestId),
+      metadata: {
+        requestId,
+        requestType: updated.requestType,
+        targetFamilyId: updated.targetFamilyId,
+      },
+    });
   }
 
   revalidatePath("/dashboard/requests");
+  revalidatePath("/dashboard/notifications");
   revalidatePath("/dashboard/families");
   revalidatePath("/admin");
   return { success: true };
@@ -277,34 +394,73 @@ export async function reviewRequest(
 // ── submitJoinFamilyAdminRequest ─────────────────────────────────────────────
 
 export async function submitJoinFamilyAdminRequest(
-  familyId: string
+  familyId: string,
+  data: {
+    applicantRelationship: string;
+    applicantMessage: string;
+    applicantContactEmail?: string;
+    applicantContactPhone?: string;
+  }
 ): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
 
   const userId = session.user.id;
+  const parsed = joinFamilyAdminRequestSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات الطلب غير صحيحة" };
+  }
 
-  const family = await db.family.findFirst({ where: { id: familyId, deletedAt: null }, select: { id: true } });
+  const [family, user] = await Promise.all([
+    db.family.findFirst({ where: { id: familyId, deletedAt: null }, select: { id: true, name: true } }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true, fullName: true, name: true },
+    }),
+  ]);
   if (!family) return { success: false, error: "العائلة غير موجودة" };
 
   if (await isActiveFamilyAdmin(userId, familyId))
     return { success: false, error: "أنت مسؤول على هذه العائلة مسبقاً" };
+
+  const applicantContactEmail = parsed.data.applicantContactEmail || user?.email || null;
+  const applicantContactPhone = parsed.data.applicantContactPhone || user?.phone || null;
+  if (!applicantContactEmail && !applicantContactPhone) {
+    return { success: false, error: "أضف بريدًا أو رقم هاتف حتى يتمكن المسؤول من التواصل معك" };
+  }
 
   const existing = await db.adminRequest.findFirst({
     where: { submittedByUserId: userId, targetFamilyId: familyId, requestType: "JOIN_FAMILY_ADMINS", status: "PENDING" },
   });
   if (existing) return { success: false, error: "لديك طلب انضمام معلق لهذه العائلة" };
 
-  await db.adminRequest.create({
+  const request = await db.adminRequest.create({
     data: {
       requestType: "JOIN_FAMILY_ADMINS",
       targetFamilyId: familyId,
+      applicantRelationship: parsed.data.applicantRelationship,
+      applicantMessage: parsed.data.applicantMessage,
+      applicantContactEmail,
+      applicantContactPhone,
       submittedByUserId: userId,
       status: "PENDING",
     },
   });
 
+  const [familyAdmins, systemAdmins] = await Promise.all([
+    getActiveFamilyAdminUserIds(familyId),
+    getSystemAdminUserIds(),
+  ]);
+  await createNotifications([...familyAdmins, ...systemAdmins].filter((id) => id !== userId), {
+    type: "REQUEST_SUBMITTED",
+    title: notificationLabels.adminSubmitted,
+    body: `طلب انضمام لإدارة عائلة ${family.name} من ${user?.fullName ?? user?.name ?? "مستخدم"} ينتظر المراجعة.`,
+    href: requestFocusHref(request.id),
+    metadata: { requestId: request.id, requestType: "JOIN_FAMILY_ADMINS", targetFamilyId: familyId },
+  });
+
   revalidatePath("/dashboard/requests");
+  revalidatePath("/dashboard/notifications");
   revalidatePath("/dashboard/families");
   return { success: true };
 }

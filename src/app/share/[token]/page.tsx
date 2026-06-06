@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TreePine, Globe, Lock, AlertTriangle } from "lucide-react";
 import SharePasswordForm from "./password-form";
 import { getShareAccessCookieName, verifyShareAccessToken } from "@/lib/share-access";
+import SuggestionPanel from "./suggestion-panel";
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -102,36 +103,70 @@ export default async function ShareLinkPage({ params }: Props) {
     select: {
       id: true,
       fullName: true,
+      kunya: true,
       gender: true,
       isLiving: true,
+      birthYear: true,
       birthDate: true,
+      birthPlace: true,
+      deathYear: true,
       deathDate: true,
+      bloodType: true,
+      residenceCity: true,
+      address: true,
+      profession: true,
+      photoUrl: true,
     },
     orderBy: { fullName: "asc" },
   });
 
   const personIds = persons.map((p) => p.id);
-  const relations = await db.parentChildRelation.findMany({
-    where: {
-      parentPersonId: { in: personIds },
-      childPersonId: { in: personIds },
-    },
-    select: { parentPersonId: true, childPersonId: true },
-  });
+  const [relations, rawMarriages] = await Promise.all([
+    db.parentChildRelation.findMany({
+      where: {
+        parentPersonId: { in: personIds },
+        childPersonId: { in: personIds },
+      },
+      select: { parentPersonId: true, childPersonId: true },
+    }),
+    db.marriageRelation.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { personAId: { in: personIds } },
+          { personBId: { in: personIds } },
+        ],
+      },
+      select: { id: true, personAId: true, personBId: true },
+    }),
+  ]);
 
   const personsForTree = persons.map((p) => ({
     id: p.id,
     fullName: p.fullName,
+    kunya: p.kunya ?? null,
     gender: p.gender,
     isLiving: p.isLiving,
+    birthYear: p.birthYear ?? null,
     birthDate: p.birthDate?.toISOString() ?? null,
+    birthPlace: p.birthPlace ?? null,
+    deathYear: p.deathYear ?? null,
     deathDate: p.deathDate?.toISOString() ?? null,
+    bloodType: p.bloodType ?? null,
+    residenceCity: p.residenceCity ?? null,
+    address: p.address ?? null,
+    profession: p.profession ?? null,
+    photoUrl: p.photoUrl ?? null,
   }));
 
   const relationsForTree = relations.map((r) => ({
     parentId: r.parentPersonId,
     childId: r.childPersonId,
   }));
+
+  const marriagesForTree = rawMarriages
+    .filter((m) => personIds.includes(m.personAId) && personIds.includes(m.personBId))
+    .map((m) => ({ id: m.id, personAId: m.personAId, personBId: m.personBId }));
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -183,16 +218,30 @@ export default async function ShareLinkPage({ params }: Props) {
         </div>
 
         {/* Tree */}
-        <div className="flex-1 relative min-h-[calc(100vh-200px)]">
+        <div className="relative tree-viewport">
           {personsForTree.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-24 text-muted-foreground">
               <TreePine className="h-16 w-16 opacity-30 mb-4" />
               <p>لا يوجد أفراد مرئيون في هذه العائلة</p>
             </div>
           ) : (
-            <FamilyTree persons={personsForTree} relations={relationsForTree} />
+            <FamilyTree
+              persons={personsForTree}
+              relations={relationsForTree}
+              marriages={marriagesForTree}
+              isLoggedIn={isLoggedIn}
+              canManage={false}
+              familyId={family.id}
+            />
           )}
         </div>
+
+        {/* Suggestion panel — always visible for share-link viewers */}
+        <SuggestionPanel
+          shareToken={token}
+          familyName={family.name}
+          persons={persons.map((p) => ({ id: p.id, fullName: p.fullName, gender: p.gender }))}
+        />
       </main>
     </div>
   );

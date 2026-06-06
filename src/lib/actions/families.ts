@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { createNotifications, getSystemAdminUserIds, requestFocusHref } from "@/lib/notifications";
+import { getHomelandPlacePathFields } from "@/lib/actions/homelands";
 
 const messages = {
   shortName:
@@ -30,7 +32,9 @@ const familySchema = z.object({
   homelandCity: z.string().max(100).optional(),
   homelandNote: z.string().max(500).optional(),
   homelandConfidence: homelandConfidenceSchema,
+  homelandPlaceId: z.string().optional().nullable(),
   isPublic: z.boolean().default(false),
+  hideFemaleMembersFromPublic: z.boolean().default(false),
 });
 
 function emptyToNull(value?: string | null) {
@@ -60,6 +64,7 @@ export async function createFamilyRequest(data: {
   homelandCity?: string;
   homelandNote?: string;
   homelandConfidence?: "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED";
+  homelandPlaceId?: string | null;
 }): Promise<FamilyActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: messages.unauthorized };
@@ -69,15 +74,24 @@ export async function createFamilyRequest(data: {
     return { success: false, error: parsed.error.issues[0]?.message ?? messages.invalidData };
   }
 
+  const selectedHomelandPlaceId = emptyToNull(parsed.data.homelandPlaceId);
+  const selectedHomeland = selectedHomelandPlaceId
+    ? await getHomelandPlacePathFields(selectedHomelandPlaceId)
+    : null;
+  if (selectedHomelandPlaceId && !selectedHomeland) {
+    return { success: false, error: messages.invalidData };
+  }
+
   const familyData = {
     name: parsed.data.name.trim(),
     originSummary: emptyToNull(parsed.data.originSummary),
     historicalNotes: emptyToNull(parsed.data.historicalNotes),
-    homelandCountry: emptyToNull(parsed.data.homelandCountry),
-    homelandRegion: emptyToNull(parsed.data.homelandRegion),
-    homelandCity: emptyToNull(parsed.data.homelandCity),
+    homelandCountry: selectedHomeland?.homelandCountry ?? emptyToNull(parsed.data.homelandCountry),
+    homelandRegion: selectedHomeland?.homelandRegion ?? emptyToNull(parsed.data.homelandRegion),
+    homelandCity: selectedHomeland?.homelandCity ?? emptyToNull(parsed.data.homelandCity),
     homelandNote: emptyToNull(parsed.data.homelandNote),
     homelandConfidence: parsed.data.homelandConfidence,
+    homelandPlaceId: selectedHomeland?.homelandPlaceId ?? null,
   };
 
   if (session.user.accountType === "SYSTEM_ADMIN") {
@@ -103,7 +117,7 @@ export async function createFamilyRequest(data: {
     return { success: true, familyId: family.id };
   }
 
-  await db.adminRequest.create({
+  const request = await db.adminRequest.create({
     data: {
       requestType: "CREATE_FAMILY_AND_ADMINISTER",
       proposedFamilyName: familyData.name,
@@ -112,12 +126,23 @@ export async function createFamilyRequest(data: {
       proposedHomelandCity: familyData.homelandCity,
       proposedHomelandNote: familyData.homelandNote,
       proposedHomelandConfidence: familyData.homelandConfidence,
+      proposedHomelandPlaceId: familyData.homelandPlaceId,
       submittedByUserId: session.user.id,
       status: "PENDING",
     },
   });
 
+  const systemAdmins = await getSystemAdminUserIds();
+  await createNotifications(systemAdmins.filter((userId) => userId !== session.user.id), {
+    type: "REQUEST_SUBMITTED",
+    title: "طلب إنشاء عائلة جديد",
+    body: `طلب إنشاء عائلة ${familyData.name} ينتظر مراجعة مدير النظام.`,
+    href: requestFocusHref(request.id),
+    metadata: { requestId: request.id, requestType: "CREATE_FAMILY_AND_ADMINISTER" },
+  });
+
   revalidatePath("/dashboard/requests");
+  revalidatePath("/dashboard/notifications");
   return { success: true, familyId: "" };
 }
 
@@ -132,7 +157,9 @@ export async function updateFamily(
     homelandCity?: string;
     homelandNote?: string;
     homelandConfidence?: "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED";
+    homelandPlaceId?: string | null;
     isPublic?: boolean;
+    hideFemaleMembersFromPublic?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
@@ -150,6 +177,16 @@ export async function updateFamily(
     return { success: false, error: parsed.error.issues[0]?.message ?? messages.invalidData };
   }
 
+  const hasHomelandPlaceUpdate = parsed.data.homelandPlaceId !== undefined;
+  const selectedHomelandPlaceId = hasHomelandPlaceUpdate ? emptyToNull(parsed.data.homelandPlaceId) : undefined;
+  const selectedHomeland =
+    selectedHomelandPlaceId !== undefined && selectedHomelandPlaceId !== null
+      ? await getHomelandPlacePathFields(selectedHomelandPlaceId)
+      : null;
+  if (selectedHomelandPlaceId && !selectedHomeland) {
+    return { success: false, error: messages.invalidData };
+  }
+
   await db.family.update({
     where: { id: familyId },
     data: {
@@ -160,15 +197,24 @@ export async function updateFamily(
       ...(parsed.data.historicalNotes !== undefined && {
         historicalNotes: emptyToNull(parsed.data.historicalNotes),
       }),
-      ...(parsed.data.homelandCountry !== undefined && {
-        homelandCountry: emptyToNull(parsed.data.homelandCountry),
-      }),
-      ...(parsed.data.homelandRegion !== undefined && {
-        homelandRegion: emptyToNull(parsed.data.homelandRegion),
-      }),
-      ...(parsed.data.homelandCity !== undefined && {
-        homelandCity: emptyToNull(parsed.data.homelandCity),
-      }),
+      ...(hasHomelandPlaceUpdate
+        ? {
+            homelandPlaceId: selectedHomeland?.homelandPlaceId ?? null,
+            homelandCountry: selectedHomeland?.homelandCountry ?? emptyToNull(parsed.data.homelandCountry),
+            homelandRegion: selectedHomeland?.homelandRegion ?? emptyToNull(parsed.data.homelandRegion),
+            homelandCity: selectedHomeland?.homelandCity ?? emptyToNull(parsed.data.homelandCity),
+          }
+        : {
+            ...(parsed.data.homelandCountry !== undefined && {
+              homelandCountry: emptyToNull(parsed.data.homelandCountry),
+            }),
+            ...(parsed.data.homelandRegion !== undefined && {
+              homelandRegion: emptyToNull(parsed.data.homelandRegion),
+            }),
+            ...(parsed.data.homelandCity !== undefined && {
+              homelandCity: emptyToNull(parsed.data.homelandCity),
+            }),
+          }),
       ...(parsed.data.homelandNote !== undefined && {
         homelandNote: emptyToNull(parsed.data.homelandNote),
       }),
@@ -176,6 +222,9 @@ export async function updateFamily(
         homelandConfidence: parsed.data.homelandConfidence,
       }),
       ...(parsed.data.isPublic !== undefined && { isPublic: parsed.data.isPublic }),
+      ...(parsed.data.hideFemaleMembersFromPublic !== undefined && {
+        hideFemaleMembersFromPublic: parsed.data.hideFemaleMembersFromPublic,
+      }),
     },
   });
 
@@ -183,6 +232,54 @@ export async function updateFamily(
   revalidatePath("/dashboard/families");
   revalidatePath("/");
   return { success: true };
+}
+
+export async function searchSimilarFamilies(name: string): Promise<
+  {
+    id: string;
+    name: string;
+    slug: string;
+    isPublic: boolean;
+    homelandCountry: string | null;
+    homelandRegion: string | null;
+    homelandCity: string | null;
+    homelandPlaceId: string | null;
+    personCount: number;
+  }[]
+> {
+  if (!name || name.trim().length < 2) return [];
+
+  const results = await db.family.findMany({
+    where: {
+      deletedAt: null,
+      name: { contains: name.trim(), mode: "insensitive" },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      isPublic: true,
+      homelandCountry: true,
+      homelandRegion: true,
+      homelandCity: true,
+      homelandPlaceId: true,
+      _count: { select: { persons: { where: { deletedAt: null } } } },
+    },
+    orderBy: { name: "asc" },
+    take: 8,
+  });
+
+  return results.map((f) => ({
+    id: f.id,
+    name: f.name,
+    slug: f.slug,
+    isPublic: f.isPublic,
+    homelandCountry: f.homelandCountry,
+    homelandRegion: f.homelandRegion,
+    homelandCity: f.homelandCity,
+    homelandPlaceId: f.homelandPlaceId,
+    personCount: f._count.persons,
+  }));
 }
 
 export async function deleteFamily(familyId: string): Promise<{ success: boolean; error?: string }> {

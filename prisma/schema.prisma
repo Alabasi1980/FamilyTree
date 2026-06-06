@@ -53,6 +53,11 @@ enum EditRequestStatus {
   REJECTED
 }
 
+enum EditRequestSource {
+  MEMBER
+  SHARE_LINK_GUEST
+}
+
 enum EditRequestType {
   ADD_PERSON
   EDIT_PERSON
@@ -72,6 +77,7 @@ enum AdminRequestType {
   CREATE_FAMILY_AND_ADMINISTER
   BECOME_FAMILY_ADMIN
   JOIN_FAMILY_ADMINS
+  LINK_USER_TO_PERSON
 }
 
 enum AdminRequestStatus {
@@ -99,6 +105,23 @@ enum HomelandConfidence {
   UNSPECIFIED
 }
 
+enum HomelandPlaceType {
+  COUNTRY
+  REGION
+  CITY
+}
+
+enum HomelandPlaceStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum HomelandPlaceRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum BranchUnificationStatus {
   PENDING
   APPROVED
@@ -116,6 +139,26 @@ enum NotificationType {
   REQUEST_APPROVED
   REQUEST_REJECTED
   REQUEST_APPLIED
+  COMPLAINT_SUBMITTED
+  COMPLAINT_UPDATED
+}
+
+enum ComplaintType {
+  ACCOUNT_ACCESS
+  FAMILY_ADMINISTRATION
+  DATA_CORRECTION
+  PRIVACY_SAFETY
+  FAMILY_LINKING
+  TECHNICAL_ISSUE
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  WAITING_USER
+  RESOLVED
+  CLOSED
 }
 
 // ===========================
@@ -140,6 +183,9 @@ model User {
   sessions    Session[]
   accounts    Account[]
 
+  linkedPersonId  String?
+  linkedPerson    Person?  @relation("UserLinkedPerson", fields: [linkedPersonId], references: [id], onDelete: SetNull)
+
   // Relations
   familyAdminAssignments FamilyAdminAssignment[]
   editRequestsSubmitted  EditRequest[]           @relation("EditRequestSubmitter")
@@ -148,6 +194,10 @@ model User {
   adminRequestsReviewed  AdminRequest[]          @relation("AdminRequestReviewer")
   shareLinksCreated      ShareLink[]
   notifications          Notification[]
+  complaintsSubmitted    Complaint[]             @relation("ComplaintSubmitter")
+  complaintsHandled      Complaint[]             @relation("ComplaintHandler")
+  homelandPlaceRequestsSubmitted HomelandPlaceRequest[] @relation("HomelandPlaceRequestSubmitter")
+  homelandPlaceRequestsReviewed  HomelandPlaceRequest[] @relation("HomelandPlaceRequestReviewer")
 
   @@index([email])
   @@index([phone])
@@ -202,7 +252,9 @@ model Family {
   homelandCity     String?
   homelandNote     String?
   homelandConfidence HomelandConfidence @default(UNSPECIFIED)
-  isPublic         Boolean   @default(false)
+  homelandPlaceId  String?
+  isPublic                   Boolean   @default(false)
+  hideFemaleMembersFromPublic Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
@@ -215,9 +267,36 @@ model Family {
   editRequests     EditRequest[]
   adminRequests    AdminRequest[]
   shareLinks       ShareLink[]
+  complaints       Complaint[]
+  homelandPlace    HomelandPlace?       @relation(fields: [homelandPlaceId], references: [id], onDelete: SetNull)
 
   @@index([slug])
+  @@index([homelandPlaceId])
   @@index([homelandCountry, homelandRegion, homelandCity])
+}
+
+model HomelandPlace {
+  id          String              @id @default(cuid())
+  name        String
+  normalizedName String
+  slug        String
+  type        HomelandPlaceType
+  status      HomelandPlaceStatus @default(ACTIVE)
+  parentId    String?
+  aliases     String[]            @default([])
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  parent      HomelandPlace?      @relation("HomelandPlaceTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    HomelandPlace[]     @relation("HomelandPlaceTree")
+  families    Family[]
+  proposedAdminRequests AdminRequest[] @relation("AdminRequestProposedHomelandPlace")
+  requests     HomelandPlaceRequest[]  @relation("HomelandPlaceRequestApprovedPlace")
+
+  @@unique([parentId, normalizedName, type])
+  @@index([parentId, type, status, sortOrder])
+  @@index([type, status])
 }
 
 model Workspace {
@@ -288,10 +367,18 @@ model Person {
   id              String          @id @default(cuid())
   familyId        String
   fullName        String
+  kunya           String?
   gender          Gender
+  birthYear       Int?
   birthDate       DateTime?
+  birthPlace      String?
+  deathYear       Int?
   deathDate       DateTime?
   isLiving        Boolean         @default(true)
+  bloodType       String?
+  residenceCity   String?
+  address         String?
+  profession      String?
   biography       String?
   photoUrl        String?
   visibilityLevel VisibilityLevel @default(PUBLIC)
@@ -306,6 +393,9 @@ model Person {
   childRelations     ParentChildRelation[] @relation("ChildPerson")
   marriagesAsPersonA MarriageRelation[]    @relation("MarriagePersonA")
   marriagesAsPersonB MarriageRelation[]    @relation("MarriagePersonB")
+
+  linkedUsers     User[]         @relation("UserLinkedPerson")
+  adminRequestsAsTarget AdminRequest[] @relation("AdminRequestTargetPerson")
 
   // Closure table relations
   ancestorIn   PersonAncestry[] @relation("AncestorPerson")
@@ -369,37 +459,47 @@ model PersonAncestry {
 // ===========================
 
 model EditRequest {
-  id                  String            @id @default(cuid())
+  id                  String              @id @default(cuid())
   requestType         EditRequestType
   targetType          TargetType
   targetId            String?
   familyId            String
-  submittedByUserId   String
+  submittedByUserId   String?
+  source              EditRequestSource   @default(MEMBER)
+  guestName           String?
+  guestContact        String?
   payloadJson         Json
-  status              EditRequestStatus @default(PENDING)
+  status              EditRequestStatus   @default(PENDING)
   reviewNotes         String?
   reviewedByUserId    String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  family           Family @relation(fields: [familyId], references: [id])
-  submittedBy      User   @relation("EditRequestSubmitter", fields: [submittedByUserId], references: [id])
-  reviewedBy       User?  @relation("EditRequestReviewer", fields: [reviewedByUserId], references: [id])
+  family           Family  @relation(fields: [familyId], references: [id])
+  submittedBy      User?   @relation("EditRequestSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy       User?   @relation("EditRequestReviewer", fields: [reviewedByUserId], references: [id])
 
   @@index([familyId, status])
   @@index([submittedByUserId])
+  @@index([familyId, source, status])
 }
 
 model AdminRequest {
   id                    String             @id @default(cuid())
   requestType           AdminRequestType
   targetFamilyId        String?
+  targetPersonId        String?
   proposedFamilyName    String?
   proposedHomelandCountry String?
   proposedHomelandRegion  String?
   proposedHomelandCity    String?
   proposedHomelandNote    String?
   proposedHomelandConfidence HomelandConfidence?
+  proposedHomelandPlaceId String?
+  applicantRelationship   String?
+  applicantMessage        String?
+  applicantContactEmail   String?
+  applicantContactPhone   String?
   submittedByUserId     String
   currentReviewerUserId String?
   status                AdminRequestStatus @default(PENDING)
@@ -409,12 +509,38 @@ model AdminRequest {
   updatedAt             DateTime           @updatedAt
 
   targetFamily  Family? @relation(fields: [targetFamilyId], references: [id])
+  targetPerson  Person? @relation("AdminRequestTargetPerson", fields: [targetPersonId], references: [id])
+  proposedHomelandPlace HomelandPlace? @relation("AdminRequestProposedHomelandPlace", fields: [proposedHomelandPlaceId], references: [id], onDelete: SetNull)
   submittedBy   User    @relation("AdminRequestSubmitter", fields: [submittedByUserId], references: [id])
   reviewedBy    User?   @relation("AdminRequestReviewer", fields: [currentReviewerUserId], references: [id])
 
   @@index([status])
   @@index([submittedByUserId])
   @@index([targetFamilyId])
+  @@index([proposedHomelandPlaceId])
+}
+
+model HomelandPlaceRequest {
+  id                 String                     @id @default(cuid())
+  countryName        String
+  regionName         String?
+  cityName           String?
+  note               String?
+  status             HomelandPlaceRequestStatus @default(PENDING)
+  submittedByUserId  String
+  reviewedByUserId   String?
+  approvedPlaceId    String?
+  reviewNotes        String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  submittedBy User           @relation("HomelandPlaceRequestSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy  User?          @relation("HomelandPlaceRequestReviewer", fields: [reviewedByUserId], references: [id])
+  approvedPlace HomelandPlace? @relation("HomelandPlaceRequestApprovedPlace", fields: [approvedPlaceId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([submittedByUserId])
+  @@index([approvedPlaceId])
 }
 
 model BranchUnificationRequest {
@@ -461,6 +587,29 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@index([userId, createdAt])
+}
+
+model Complaint {
+  id              String          @id @default(cuid())
+  submittedByUserId String
+  familyId        String?
+  type            ComplaintType
+  status          ComplaintStatus @default(OPEN)
+  title           String
+  body            String
+  adminResponse   String?
+  handledByUserId String?
+  resolvedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  submittedBy User    @relation("ComplaintSubmitter", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  handledBy   User?   @relation("ComplaintHandler", fields: [handledByUserId], references: [id])
+  family      Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([submittedByUserId, createdAt])
+  @@index([familyId])
 }
 
 // ===========================

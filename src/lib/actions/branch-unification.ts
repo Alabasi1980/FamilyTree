@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { recomputeFamilyAncestry } from "@/lib/actions/persons";
-import { createNotifications, getActiveFamilyAdminUserIds, getSystemAdminUserIds } from "@/lib/notifications";
+import { createNotifications, getActiveFamilyAdminUserIds, getSystemAdminUserIds, requestFocusHref } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -202,7 +202,7 @@ async function applyBranchUnification(requestId: string) {
     type: "REQUEST_APPLIED",
     title: messages.appliedTitle,
     body: messages.approved,
-    href: "/dashboard/requests",
+    href: requestFocusHref(requestId),
     metadata: { requestId, sourceFamilyId: req.sourceFamilyId, targetFamilyId: req.targetFamilyId },
   });
 }
@@ -265,7 +265,7 @@ export async function submitBranchUnificationRequest(rawData: unknown) {
     type: "REQUEST_SUBMITTED",
     title: messages.submittedTitle,
     body: messages.submittedBody,
-    href: "/dashboard/requests",
+    href: requestFocusHref(request.id),
     metadata: {
       requestId: request.id,
       sourceFamilyId: data.sourceFamilyId,
@@ -318,7 +318,7 @@ export async function reviewBranchUnificationRequest(requestId: string, approve:
     await createNotifications([...sourceAdmins, ...targetAdmins, req.submittedByUserId].filter((userId) => userId !== session.user.id), {
       type: "REQUEST_REJECTED",
       title: messages.rejected,
-      href: "/dashboard/requests",
+      href: requestFocusHref(requestId),
       metadata: { requestId, sourceFamilyId: req.sourceFamilyId, targetFamilyId: req.targetFamilyId },
     });
   } else {
@@ -340,7 +340,7 @@ export async function reviewBranchUnificationRequest(requestId: string, approve:
       type: "REQUEST_APPROVED",
       title: messages.approvedTitle,
       body: messages.approved,
-      href: "/dashboard/requests",
+      href: requestFocusHref(requestId),
       metadata: { requestId, sourceFamilyId: req.sourceFamilyId, targetFamilyId: req.targetFamilyId },
     });
   }

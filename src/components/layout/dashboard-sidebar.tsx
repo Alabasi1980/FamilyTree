@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 import { useState } from "react";
 import {
   TreePine, LayoutDashboard, Users, ClipboardList,
-  Settings, LogOut, Shield, Menu, X, Globe, Bell,
+  Settings, LogOut, Shield, Menu, X, Globe, Bell, AlertTriangle, MapPinned,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { withBasePath } from "@/lib/base-path";
@@ -33,12 +33,15 @@ const familyNav = [
   { href: "/dashboard/families", label: "عائلاتي", icon: TreePine, exact: false },
   { href: "/dashboard/requests", label: "الطلبات", icon: ClipboardList, exact: false },
   { href: "/dashboard/notifications", label: "التنبيهات", icon: Bell, exact: false },
+  { href: "/dashboard/complaints", label: "الشكاوى", icon: AlertTriangle, exact: false },
 ];
 
 const adminNav = [
   { href: "/admin", label: "لوحة الإدارة", icon: Shield, exact: true },
   { href: "/admin/users", label: "المستخدمون", icon: Users, exact: false },
   { href: "/admin/families", label: "كل العائلات", icon: TreePine, exact: false },
+  { href: "/admin/homelands", label: "إدارة المواطن", icon: MapPinned, exact: false },
+  { href: "/admin/complaints", label: "الشكاوى", icon: AlertTriangle, exact: false },
 ];
 
 // ── Shared nav link ──────────────────────────────────────────────────────────

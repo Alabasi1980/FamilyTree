@@ -5,13 +5,14 @@ import { Users, TreePine, ClipboardList, Shield } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboard() {
-  const [totalUsers, totalFamilies, totalPersons, pendingAdminReqs, pendingEditReqs] =
+  const [totalUsers, totalFamilies, totalPersons, pendingAdminReqs, pendingEditReqs, activeComplaints] =
     await Promise.all([
       db.user.count({ where: { deletedAt: null } }),
       db.family.count({ where: { deletedAt: null } }),
       db.person.count({ where: { deletedAt: null } }),
       db.adminRequest.count({ where: { status: "PENDING" } }),
       db.editRequest.count({ where: { status: "PENDING" } }),
+      db.complaint.count({ where: { status: { in: ["OPEN", "IN_REVIEW", "WAITING_USER"] } } }),
     ]);
 
   const recentRequests = await db.adminRequest.findMany({
@@ -38,6 +39,13 @@ export default async function AdminDashboard() {
       icon: ClipboardList,
       href: "/dashboard/requests",
       urgent: pendingEditReqs > 0,
+    },
+    {
+      label: "شكاوى نشطة",
+      value: activeComplaints,
+      icon: ClipboardList,
+      href: "/admin/complaints",
+      urgent: activeComplaints > 0,
     },
   ];
 

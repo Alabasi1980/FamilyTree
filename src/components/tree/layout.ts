@@ -10,6 +10,12 @@ export const GAP_Y  = 160;
 // Minimal structural types so this module stays import-free of components
 export interface LayoutPerson  { id: string }
 export interface LayoutRelation { parentId: string; childId: string }
+export interface LayoutMarriage { personAId: string; personBId: string }
+
+export interface LayoutOptions {
+  /** Marriages used to seat a married-in spouse beside their partner on the same generation row. */
+  marriages?: LayoutMarriage[];
+}
 
 export interface LayoutBounds {
   minX: number; minY: number;
@@ -21,7 +27,8 @@ export interface LayoutBounds {
 // Identical to the original private function in family-tree.tsx.
 export function buildLayout(
   persons: LayoutPerson[],
-  relations: LayoutRelation[]
+  relations: LayoutRelation[],
+  options: LayoutOptions = {}
 ): Map<string, { x: number; y: number }> {
   if (persons.length === 0) return new Map();
 
@@ -34,10 +41,29 @@ export function buildLayout(
     parentMap.get(childId)?.push(parentId);
   });
 
-  // BFS — assign generation depth from roots
+  // Partner map (each person → spouses), restricted to persons present in this layout.
+  const presentIds = new Set(persons.map((p) => p.id));
+  const partnerMap = new Map<string, string[]>();
+  (options.marriages ?? []).forEach(({ personAId, personBId }) => {
+    if (!presentIds.has(personAId) || !presentIds.has(personBId)) return;
+    partnerMap.set(personAId, [...(partnerMap.get(personAId) ?? []), personBId]);
+    partnerMap.set(personBId, [...(partnerMap.get(personBId) ?? []), personAId]);
+  });
+
+  // "Married-in" = no parents AND no children, but married to someone in the tree.
+  // These are seated beside their partner instead of consuming a top-row column.
+  const marriedIn = new Set<string>();
+  persons.forEach((p) => {
+    const hasParents  = (parentMap.get(p.id)?.length ?? 0) > 0;
+    const hasChildren = (childrenMap.get(p.id)?.length ?? 0) > 0;
+    const hasPartner  = (partnerMap.get(p.id)?.length ?? 0) > 0;
+    if (!hasParents && !hasChildren && hasPartner) marriedIn.add(p.id);
+  });
+
+  // BFS — assign generation depth from roots (excluding married-in spouses)
   const depth = new Map<string, number>();
   const queue: Array<{ id: string; d: number }> = persons
-    .filter((p) => (parentMap.get(p.id)?.length ?? 0) === 0)
+    .filter((p) => !marriedIn.has(p.id) && (parentMap.get(p.id)?.length ?? 0) === 0)
     .map((p) => ({ id: p.id, d: 0 }));
 
   while (queue.length > 0) {
@@ -46,7 +72,6 @@ export function buildLayout(
     depth.set(item.id, item.d);
     childrenMap.get(item.id)?.forEach((c) => queue.push({ id: c, d: item.d + 1 }));
   }
-  persons.forEach((p) => { if (!depth.has(p.id)) depth.set(p.id, 0); });
 
   const positions = new Map<string, { x: number; y: number }>();
   let leafCounter = 0;
@@ -54,7 +79,7 @@ export function buildLayout(
   function place(id: string): number {
     if (positions.has(id)) return positions.get(id)!.x;
     const d        = depth.get(id) ?? 0;
-    const children = childrenMap.get(id) ?? [];
+    const children = (childrenMap.get(id) ?? []).filter((c) => !marriedIn.has(c));
 
     if (children.length === 0) {
       const x = leafCounter * (NODE_W + GAP_X);
@@ -69,7 +94,23 @@ export function buildLayout(
     return x;
   }
 
-  persons.filter((p) => (parentMap.get(p.id)?.length ?? 0) === 0).forEach((r) => place(r.id));
+  persons
+    .filter((p) => !marriedIn.has(p.id) && (parentMap.get(p.id)?.length ?? 0) === 0)
+    .forEach((r) => place(r.id));
+
+  // Seat married-in spouses next to their (already placed) partner on the same row.
+  const spouseOffsetCount = new Map<string, number>();
+  marriedIn.forEach((id) => {
+    const partnerId = (partnerMap.get(id) ?? []).find((pid) => positions.has(pid));
+    if (!partnerId) return;
+    const base = positions.get(partnerId)!;
+    const n = (spouseOffsetCount.get(partnerId) ?? 0) + 1;
+    spouseOffsetCount.set(partnerId, n);
+    positions.set(id, { x: base.x + n * (NODE_W + GAP_X), y: base.y });
+    depth.set(id, (depth.get(partnerId) ?? 0));
+  });
+
+  // Fallback for anything still unplaced (isolated persons, orphan spouses).
   persons.forEach((p) => {
     if (!positions.has(p.id)) {
       positions.set(p.id, { x: leafCounter * (NODE_W + GAP_X), y: 0 });

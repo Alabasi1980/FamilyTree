@@ -8,6 +8,7 @@ export interface DuplicateCandidate {
   gender: "MALE" | "FEMALE";
   isLiving: boolean;
   birthDate: string | null;
+  birthYear: number | null;
   score: number; // 0–100
   reasons: string[];
 }
@@ -51,7 +52,7 @@ export async function findDuplicateCandidates(
       gender,
       ...(excludePersonId ? { id: { not: excludePersonId } } : {}),
     },
-    select: { id: true, fullName: true, gender: true, isLiving: true, birthDate: true },
+    select: { id: true, fullName: true, gender: true, isLiving: true, birthYear: true, birthDate: true },
   });
 
   const candidates: DuplicateCandidate[] = [];
@@ -69,8 +70,9 @@ export async function findDuplicateCandidates(
     else if (similarity >= 0.5) reasons.push("تشابه في الاسم");
 
     // Score: birth year proximity (0–30 points)
-    if (birthYear && person.birthDate) {
-      const py = person.birthDate.getFullYear();
+    const candidateBirthYear = person.birthYear ?? person.birthDate?.getFullYear() ?? null;
+    if (birthYear && candidateBirthYear) {
+      const py = candidateBirthYear;
       const diff = Math.abs(py - birthYear);
       if (diff === 0) { score += 30; reasons.push("نفس سنة الميلاد"); }
       else if (diff <= 2) { score += 20; reasons.push("سنة ميلاد قريبة جداً"); }
@@ -85,6 +87,7 @@ export async function findDuplicateCandidates(
         gender: person.gender,
         isLiving: person.isLiving,
         birthDate: person.birthDate?.toISOString() ?? null,
+        birthYear: candidateBirthYear,
         score: Math.min(score, 100),
         reasons,
       });

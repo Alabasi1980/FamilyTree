@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RequestReviewCard } from "@/components/requests/request-review-card";
 import { BranchUnificationReviewCard } from "@/components/requests/branch-unification-review-card";
-import { ClipboardList, Send } from "lucide-react";
+import { ClipboardList, Send, Link2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const statusLabels = {
   PENDING: { label: "قيد الانتظار", variant: "gold" as const },
@@ -23,6 +24,7 @@ const requestTypeLabels: Record<string, string> = {
   CREATE_FAMILY_AND_ADMINISTER: "طلب إنشاء عائلة جديدة",
   BECOME_FAMILY_ADMIN: "طلب إدارة عائلة",
   JOIN_FAMILY_ADMINS: "طلب الانضمام كمسؤول عائلة",
+  LINK_USER_TO_PERSON: "طلب ربط بورقة في الشجرة",
 };
 
 const branchRelationshipLabels: Record<string, string> = {
@@ -42,7 +44,13 @@ const branchLabels = {
   unknown: "—",
 };
 
-export default async function RequestsPage() {
+interface RequestsPageProps {
+  searchParams: Promise<{ focus?: string | string[] }>;
+}
+
+export default async function RequestsPage({ searchParams }: RequestsPageProps) {
+  const { focus } = await searchParams;
+  const focusId = Array.isArray(focus) ? focus[0] : focus;
   const session = await auth();
   const user = session!.user;
   const isSystemAdmin = user.accountType === "SYSTEM_ADMIN";
@@ -65,16 +73,21 @@ export default async function RequestsPage() {
             submittedBy: { select: { fullName: true, name: true } },
             family: { select: { name: true } },
           },
-          orderBy: { createdAt: "desc" },
+          orderBy: [{ source: "desc" }, { createdAt: "desc" }],
           take: 30,
         }),
         db.adminRequest.findMany({
           where: isSystemAdmin
             ? { status: "PENDING" }
-            : { status: "PENDING", requestType: "JOIN_FAMILY_ADMINS", targetFamilyId: { in: myAdminFamilyIds } },
+            : {
+                status: "PENDING",
+                requestType: { in: ["JOIN_FAMILY_ADMINS", "LINK_USER_TO_PERSON"] },
+                targetFamilyId: { in: myAdminFamilyIds },
+              },
           include: {
-            submittedBy: { select: { fullName: true, name: true } },
+            submittedBy: { select: { fullName: true, name: true, email: true, phone: true } },
             targetFamily: { select: { name: true } },
+            targetPerson: { select: { fullName: true } },
           },
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -180,16 +193,38 @@ export default async function RequestsPage() {
                 {adminToReview.map((req) => (
                   <RequestRow
                     key={req.id}
+                    requestId={req.id}
+                    focused={focusId === req.id}
                     label={requestTypeLabels[req.requestType] ?? req.requestType}
                     sub={[
                       req.proposedFamilyName ? `عائلة: ${req.proposedFamilyName}` : null,
                       req.targetFamily ? `عائلة: ${req.targetFamily.name}` : null,
+                      req.targetPerson ? `الشخص: ${req.targetPerson.fullName}` : null,
                       req.submittedBy
                         ? `من: ${req.submittedBy.fullName ?? req.submittedBy.name ?? branchLabels.unknown}`
+                        : null,
+                      req.requestType === "JOIN_FAMILY_ADMINS" && req.applicantRelationship
+                        ? `الصلة: ${req.applicantRelationship}`
+                        : null,
+                      req.requestType === "JOIN_FAMILY_ADMINS"
+                        ? formatJoinContactLine(
+                            req.applicantContactEmail ?? req.submittedBy?.email,
+                            req.applicantContactPhone ?? req.submittedBy?.phone
+                          )
                         : null,
                       new Date(req.createdAt).toLocaleDateString("ar"),
                     ]}
                     status={req.status}
+                    details={
+                      req.requestType === "JOIN_FAMILY_ADMINS" ? (
+                        <JoinAdminRequestDetails
+                          relationship={req.applicantRelationship}
+                          message={req.applicantMessage}
+                          email={req.applicantContactEmail ?? req.submittedBy?.email}
+                          phone={req.applicantContactPhone ?? req.submittedBy?.phone}
+                        />
+                      ) : null
+                    }
                     reviewCard={
                       req.status === "PENDING" ? (
                         <RequestReviewCard requestId={req.id} type="admin" />
@@ -201,6 +236,7 @@ export default async function RequestsPage() {
                   <BranchRequestRow
                     key={req.id}
                     request={req}
+                    focusId={focusId}
                     familyMap={branchFamilyMap}
                     personMap={branchPersonMap}
                     userMap={branchUserMap}
@@ -210,15 +246,25 @@ export default async function RequestsPage() {
                 {editToReview.map((req) => (
                   <RequestRow
                     key={req.id}
+                    requestId={req.id}
+                    focused={focusId === req.id}
                     label={requestTypeLabels[req.requestType] ?? req.requestType}
+                    isGuestSuggestion={req.source === "SHARE_LINK_GUEST"}
                     sub={[
                       req.family ? `عائلة: ${req.family.name}` : null,
-                      req.submittedBy
+                      req.source === "SHARE_LINK_GUEST"
+                        ? `من زائر: ${req.guestName ?? "مجهول"}`
+                        : req.submittedBy
                         ? `من: ${req.submittedBy.fullName ?? req.submittedBy.name ?? branchLabels.unknown}`
                         : null,
                       new Date(req.createdAt).toLocaleDateString("ar"),
                     ]}
                     status={req.status}
+                    details={
+                      req.source === "SHARE_LINK_GUEST" && (req.guestName || req.guestContact)
+                        ? <GuestSuggestionDetails name={req.guestName} contact={req.guestContact} />
+                        : null
+                    }
                     reviewCard={
                       req.status === "PENDING" ? (
                         <RequestReviewCard requestId={req.id} type="edit" />
@@ -248,13 +294,28 @@ export default async function RequestsPage() {
                 {myAdminRequests.map((req) => (
                   <RequestRow
                     key={req.id}
+                    requestId={req.id}
+                    focused={focusId === req.id}
                     label={requestTypeLabels[req.requestType] ?? req.requestType}
                     sub={[
                       req.proposedFamilyName ? `عائلة: ${req.proposedFamilyName}` : null,
                       req.targetFamily ? `عائلة: ${req.targetFamily.name}` : null,
+                      req.requestType === "JOIN_FAMILY_ADMINS" && req.applicantRelationship
+                        ? `الصلة: ${req.applicantRelationship}`
+                        : null,
                       new Date(req.createdAt).toLocaleDateString("ar"),
                     ]}
                     status={req.status}
+                    details={
+                      req.requestType === "JOIN_FAMILY_ADMINS" ? (
+                        <JoinAdminRequestDetails
+                          relationship={req.applicantRelationship}
+                          message={req.applicantMessage}
+                          email={req.applicantContactEmail}
+                          phone={req.applicantContactPhone}
+                        />
+                      ) : null
+                    }
                     reviewCard={null}
                   />
                 ))}
@@ -262,6 +323,7 @@ export default async function RequestsPage() {
                   <BranchRequestRow
                     key={req.id}
                     request={req}
+                    focusId={focusId}
                     familyMap={branchFamilyMap}
                     personMap={branchPersonMap}
                     userMap={branchUserMap}
@@ -271,6 +333,8 @@ export default async function RequestsPage() {
                 {myEditRequests.map((req) => (
                   <RequestRow
                     key={req.id}
+                    requestId={req.id}
+                    focused={focusId === req.id}
                     label={requestTypeLabels[req.requestType] ?? req.requestType}
                     sub={[
                       req.family ? `عائلة: ${req.family.name}` : null,
@@ -303,12 +367,14 @@ type BranchRequest = {
 
 function BranchRequestRow({
   request,
+  focusId,
   familyMap,
   personMap,
   userMap,
   reviewCard,
 }: {
   request: BranchRequest;
+  focusId?: string;
   familyMap: Map<string, string>;
   personMap: Map<string, string>;
   userMap: Map<string, string>;
@@ -316,6 +382,8 @@ function BranchRequestRow({
 }) {
   return (
     <RequestRow
+      requestId={request.id}
+      focused={focusId === request.id}
       label={branchLabels.request}
       sub={[
         `${branchLabels.sourceFamily}: ${familyMap.get(request.sourceFamilyId) ?? branchLabels.unknown}`,
@@ -333,21 +401,45 @@ function BranchRequestRow({
 }
 
 function RequestRow({
+  requestId,
+  focused,
   label,
   sub,
   status,
+  details,
   reviewCard,
+  isGuestSuggestion = false,
 }: {
+  requestId: string;
+  focused?: boolean;
   label: string;
   sub: (string | null)[];
   status: "PENDING" | "APPROVED" | "REJECTED";
+  details?: ReactNode;
   reviewCard: ReactNode;
+  isGuestSuggestion?: boolean;
 }) {
   return (
-    <li className="flex items-start justify-between gap-3 px-6 py-3">
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
+    <li
+      id={`request-${requestId}`}
+      className={cn(
+        "scroll-mt-24 flex items-start justify-between gap-3 px-6 py-3 transition-colors",
+        focused && "bg-accent/10 ring-1 ring-inset ring-accent/30",
+        isGuestSuggestion && "bg-amber-500/5"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          {isGuestSuggestion && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
+              <Link2 className="h-2.5 w-2.5" />
+              رابط مشاركة
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">{sub.filter(Boolean).join(" • ")}</p>
+        {details}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Badge variant={statusLabels[status].variant}>{statusLabels[status].label}</Badge>
@@ -355,4 +447,71 @@ function RequestRow({
       </div>
     </li>
   );
+}
+
+function GuestSuggestionDetails({
+  name,
+  contact,
+}: {
+  name?: string | null;
+  contact?: string | null;
+}) {
+  if (!name && !contact) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-6">
+      {name && (
+        <p>
+          <span className="text-muted-foreground">اسم المقترح: </span>
+          <span className="text-foreground">{name}</span>
+        </p>
+      )}
+      {contact && (
+        <p>
+          <span className="text-muted-foreground">وسيلة التواصل: </span>
+          <span className="text-foreground">{contact}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function JoinAdminRequestDetails({
+  relationship,
+  message,
+  email,
+  phone,
+}: {
+  relationship?: string | null;
+  message?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}) {
+  if (!relationship && !message && !email && !phone) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-border/40 bg-background/35 px-3 py-2 text-xs leading-6">
+      {relationship && (
+        <p>
+          <span className="text-muted-foreground">الصلة بالعائلة: </span>
+          <span className="text-foreground">{relationship}</span>
+        </p>
+      )}
+      {(email || phone) && (
+        <p>
+          <span className="text-muted-foreground">وسيلة التواصل: </span>
+          <span className="text-foreground">{[email, phone].filter(Boolean).join(" / ")}</span>
+        </p>
+      )}
+      {message && (
+        <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+          <span className="text-foreground">رسالة الطالب: </span>
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatJoinContactLine(email?: string | null, phone?: string | null) {
+  const contact = [email, phone].filter(Boolean).join(" / ");
+  return contact ? `التواصل: ${contact}` : null;
 }

@@ -4,22 +4,67 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { createNotifications, getActiveFamilyAdminUserIds, getSystemAdminUserIds, requestFocusHref } from "@/lib/notifications";
+
+const currentYear = new Date().getFullYear();
+
+const optionalText = (max: number) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().max(max).optional()
+  );
+
+const optionalYear = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : value;
+  },
+  z.number().int().min(1).max(currentYear + 1).optional()
+);
+
+const optionalDateText = optionalText(20);
+const visibilitySchema = z.enum(["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]);
+const defaultVisibilityForGender = (gender: "MALE" | "FEMALE") => (gender === "FEMALE" ? "ADMIN" : "PUBLIC");
 
 const personSchema = z.object({
   familyId: z.string().cuid(),
   fullName: z.string().min(2).max(200),
+  kunya: optionalText(80),
   gender: z.enum(["MALE", "FEMALE"]),
   isLiving: z.boolean().default(true),
-  birthDate: z.string().optional(),
-  deathDate: z.string().optional(),
+  birthYear: optionalYear,
+  birthDate: optionalDateText,
+  birthPlace: optionalText(160),
+  deathYear: optionalYear,
+  deathDate: optionalDateText,
+  bloodType: optionalText(12),
+  residenceCity: optionalText(120),
+  address: optionalText(240),
+  profession: optionalText(120),
   biography: z.string().max(2000).optional(),
   notes: z.string().max(500).optional(),
-  visibilityLevel: z.enum(["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]).default("PUBLIC"),
+  photoUrl: optionalText(500),
+  visibilityLevel: visibilitySchema.optional(),
 });
 
 export type PersonActionResult =
   | { success: true; personId: string }
   | { success: false; error: string };
+
+type ParsedPersonInput = z.infer<typeof personSchema>;
+
+function normalizePersonInput(data: ParsedPersonInput) {
+  const birthYear = data.birthYear ?? (data.birthDate ? new Date(data.birthDate).getFullYear() : null);
+  const deathYear = data.deathYear ?? (data.deathDate ? new Date(data.deathDate).getFullYear() : null);
+  return {
+    ...data,
+    birthYear,
+    deathYear,
+    isLiving: deathYear || data.deathDate ? false : data.isLiving,
+    visibilityLevel: data.visibilityLevel ?? defaultVisibilityForGender(data.gender),
+  };
+}
 
 async function canManageFamily(userId: string, familyId: string, isSystemAdmin: boolean) {
   if (isSystemAdmin) return true;
@@ -133,6 +178,7 @@ async function validateParentSlot(parentId: string, childId: string) {
     where: {
       childPersonId: childId,
       parentPersonId: { not: parentId },
+      parent: { deletedAt: null },
     },
     include: {
       parent: { select: { gender: true } },
@@ -147,9 +193,35 @@ async function validateParentSlot(parentId: string, childId: string) {
   return null;
 }
 
+async function notifyEditRequestSubmitted({
+  requestId,
+  familyId,
+  submittedByUserId,
+  title,
+}: {
+  requestId: string;
+  familyId: string;
+  submittedByUserId: string;
+  title: string;
+}) {
+  const [family, familyAdmins, systemAdmins] = await Promise.all([
+    db.family.findUnique({ where: { id: familyId }, select: { name: true } }),
+    getActiveFamilyAdminUserIds(familyId),
+    getSystemAdminUserIds(),
+  ]);
+
+  await createNotifications([...familyAdmins, ...systemAdmins].filter((userId) => userId !== submittedByUserId), {
+    type: "REQUEST_SUBMITTED",
+    title,
+    body: `طلب متعلق بعائلة ${family?.name ?? "غير محددة"} ينتظر المراجعة.`,
+    href: requestFocusHref(requestId),
+    metadata: { requestId, familyId },
+  });
+}
+
 async function validateNewParentSlot(childId: string, gender: "MALE" | "FEMALE") {
   const existingParents = await db.parentChildRelation.findMany({
-    where: { childPersonId: childId },
+    where: { childPersonId: childId, parent: { deletedAt: null } },
     include: {
       parent: { select: { gender: true } },
     },
@@ -172,22 +244,29 @@ export async function createPerson(rawData: unknown): Promise<PersonActionResult
     return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
   }
 
-  const data = parsed.data;
+  const data = normalizePersonInput(parsed.data);
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
 
   if (!(await canManageFamily(session.user.id, data.familyId, isAdmin))) {
     // Non-admin: create edit request instead
-    await db.editRequest.create({
+    const request = await db.editRequest.create({
       data: {
         requestType: "ADD_PERSON",
         targetType: "PERSON",
         familyId: data.familyId,
         submittedByUserId: session.user.id,
-        payloadJson: data,
+        payloadJson: toJsonPayload(data),
       },
     });
+    await notifyEditRequestSubmitted({
+      requestId: request.id,
+      familyId: data.familyId,
+      submittedByUserId: session.user.id,
+      title: "طلب إضافة فرد جديد",
+    });
     revalidatePath("/dashboard/requests");
+    revalidatePath("/dashboard/notifications");
     return { success: true, personId: "" };
   }
 
@@ -195,12 +274,21 @@ export async function createPerson(rawData: unknown): Promise<PersonActionResult
     data: {
       familyId: data.familyId,
       fullName: data.fullName,
+      kunya: data.kunya ?? null,
       gender: data.gender,
       isLiving: data.isLiving,
+      birthYear: data.birthYear,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
+      birthPlace: data.birthPlace ?? null,
+      deathYear: data.deathYear,
       deathDate: data.deathDate ? new Date(data.deathDate) : null,
+      bloodType: data.bloodType ?? null,
+      residenceCity: data.residenceCity ?? null,
+      address: data.address ?? null,
+      profession: data.profession ?? null,
       biography: data.biography ?? null,
       notes: data.notes ?? null,
+      photoUrl: data.photoUrl ?? null,
       visibilityLevel: data.visibilityLevel,
     },
   });
@@ -260,14 +348,41 @@ export async function addParentChildRelation(
 
 const updatePersonSchema = z.object({
   fullName: z.string().min(2).max(200),
+  kunya: optionalText(80),
   gender: z.enum(["MALE", "FEMALE"]),
   isLiving: z.boolean().default(true),
-  birthDate: z.string().optional(),
-  deathDate: z.string().optional(),
+  birthYear: optionalYear,
+  birthDate: optionalDateText,
+  birthPlace: optionalText(160),
+  deathYear: optionalYear,
+  deathDate: optionalDateText,
+  bloodType: optionalText(12),
+  residenceCity: optionalText(120),
+  address: optionalText(240),
+  profession: optionalText(120),
   biography: z.string().max(2000).optional(),
   notes: z.string().max(500).optional(),
-  visibilityLevel: z.enum(["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]).default("PUBLIC"),
+  photoUrl: optionalText(500),
+  visibilityLevel: visibilitySchema.optional(),
 });
+
+type ParsedUpdatePersonInput = z.infer<typeof updatePersonSchema>;
+
+function normalizeUpdatePersonInput(data: ParsedUpdatePersonInput) {
+  const birthYear = data.birthYear ?? (data.birthDate ? new Date(data.birthDate).getFullYear() : null);
+  const deathYear = data.deathYear ?? (data.deathDate ? new Date(data.deathDate).getFullYear() : null);
+  return {
+    ...data,
+    birthYear,
+    deathYear,
+    isLiving: deathYear || data.deathDate ? false : data.isLiving,
+    visibilityLevel: data.visibilityLevel ?? defaultVisibilityForGender(data.gender),
+  };
+}
+
+function toJsonPayload<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
 
 export async function updatePerson(personId: string, rawData: unknown): Promise<PersonActionResult> {
   const session = await auth();
@@ -281,21 +396,28 @@ export async function updatePerson(personId: string, rawData: unknown): Promise<
     return { success: false, error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
   }
 
-  const data = parsed.data;
+  const data = normalizeUpdatePersonInput(parsed.data);
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
 
   if (!(await canManageFamily(session.user.id, person.familyId, isAdmin))) {
-    await db.editRequest.create({
+    const request = await db.editRequest.create({
       data: {
         requestType: "EDIT_PERSON",
         targetType: "PERSON",
         targetId: personId,
         familyId: person.familyId,
         submittedByUserId: session.user.id,
-        payloadJson: data,
+        payloadJson: toJsonPayload(data),
       },
     });
+    await notifyEditRequestSubmitted({
+      requestId: request.id,
+      familyId: person.familyId,
+      submittedByUserId: session.user.id,
+      title: "طلب تعديل فرد",
+    });
     revalidatePath("/dashboard/requests");
+    revalidatePath("/dashboard/notifications");
     return { success: true, personId };
   }
 
@@ -303,12 +425,21 @@ export async function updatePerson(personId: string, rawData: unknown): Promise<
     where: { id: personId },
     data: {
       fullName: data.fullName,
+      kunya: data.kunya ?? null,
       gender: data.gender,
       isLiving: data.isLiving,
+      birthYear: data.birthYear,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
+      birthPlace: data.birthPlace ?? null,
+      deathYear: data.deathYear,
       deathDate: data.deathDate ? new Date(data.deathDate) : null,
+      bloodType: data.bloodType ?? null,
+      residenceCity: data.residenceCity ?? null,
+      address: data.address ?? null,
+      profession: data.profession ?? null,
       biography: data.biography ?? null,
       notes: data.notes ?? null,
+      photoUrl: data.photoUrl ?? null,
       visibilityLevel: data.visibilityLevel,
     },
   });
@@ -359,7 +490,7 @@ export async function createPersonAsChildOf(
       fullName: newPersonData.fullName.trim(),
       gender: newPersonData.gender,
       isLiving: true,
-      visibilityLevel: "PUBLIC",
+      visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
     },
   });
 
@@ -399,7 +530,7 @@ export async function createPersonAsParentOf(
       fullName: newPersonData.fullName.trim(),
       gender: newPersonData.gender,
       isLiving: false,
-      visibilityLevel: "PUBLIC",
+      visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
     },
   });
 
@@ -412,6 +543,48 @@ export async function createPersonAsParentOf(
   revalidatePath(`/dashboard/families/${child.familyId}`);
   revalidatePath(`/family/${child.familyId}`);
   return { success: true, personId: parent.id };
+}
+
+export async function createPersonAsSpouseOf(
+  personId: string,
+  newPersonData: { fullName: string }
+): Promise<PersonActionResult> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: "غير مصرح" };
+  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+
+  const person = await db.person.findUnique({ where: { id: personId } });
+  if (!person || person.deletedAt) return { success: false, error: "الشخص غير موجود" };
+
+  const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+  if (!(await canManageFamily(session.user.id, person.familyId, isAdmin))) {
+    return { success: false, error: "لا تملك صلاحية الإضافة" };
+  }
+
+  // الزوج/ة بالجنس المعاكس تلقائياً
+  const spouseGender = person.gender === "MALE" ? "FEMALE" : "MALE";
+
+  const spouse = await db.person.create({
+    data: {
+      familyId: person.familyId,
+      fullName: newPersonData.fullName.trim(),
+      gender: spouseGender,
+      isLiving: person.isLiving,
+      visibilityLevel: defaultVisibilityForGender(spouseGender),
+    },
+  });
+
+  await db.personAncestry.create({
+    data: { ancestorId: spouse.id, descendantId: spouse.id, depth: 0 },
+  });
+
+  await db.marriageRelation.create({
+    data: { personAId: person.id, personBId: spouse.id },
+  });
+
+  revalidatePath(`/dashboard/families/${person.familyId}`);
+  revalidatePath(`/family/${person.familyId}`);
+  return { success: true, personId: spouse.id };
 }
 
 export async function removeParentChildRelation(

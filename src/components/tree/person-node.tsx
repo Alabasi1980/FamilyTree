@@ -15,10 +15,15 @@ interface LinkedFamilyBadge {
 interface PersonData {
   id: string;
   fullName: string;
+  kunya?: string | null;
   gender: "MALE" | "FEMALE";
   isLiving: boolean;
+  birthYear?: number | null;
   birthDate: string | null;
+  deathYear?: number | null;
   deathDate: string | null;
+  profession?: string | null;
+  photoUrl?: string | null;
   linkedFamilyBadges?: LinkedFamilyBadge[];
   isHighlighted?: boolean;
   isDimmed?: boolean;
@@ -40,8 +45,8 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
   const p = data as PersonData;
   const isMale = p.gender === "MALE";
 
-  const birthYear = p.birthDate ? new Date(p.birthDate).getFullYear() : null;
-  const deathYear = p.deathDate ? new Date(p.deathDate).getFullYear() : null;
+  const birthYear = p.birthYear ?? (p.birthDate ? new Date(p.birthDate).getFullYear() : null);
+  const deathYear = p.deathYear ?? (p.deathDate ? new Date(p.deathDate).getFullYear() : null);
   const age =
     birthYear && deathYear
       ? deathYear - birthYear
@@ -81,18 +86,28 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
       <div className="flex items-center gap-2.5 px-3 py-2.5">
         <div
           className={`
-            w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold
+            w-9 h-9 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-sm font-bold
             ${isMale ? "bg-blue-500/15 text-blue-400" : "bg-rose-400/15 text-rose-400"}
             ${!p.isLiving ? "grayscale opacity-70" : ""}
           `}
         >
-          {initials || labels.unknown}
+          {p.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            initials || labels.unknown
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold text-foreground leading-tight line-clamp-2">
             {p.fullName}
           </p>
+          {(p.kunya || p.profession) && (
+            <p className="mt-0.5 truncate text-[9px] text-muted-foreground/70">
+              {[p.kunya, p.profession].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
             {birthYear ? (
               <span className="text-[10px] text-muted-foreground">

@@ -24,12 +24,21 @@ export default async function EditPersonPage({ params }: Props) {
       select: {
         id: true,
         fullName: true,
+        kunya: true,
         gender: true,
         isLiving: true,
+        birthYear: true,
         birthDate: true,
+        birthPlace: true,
+        deathYear: true,
         deathDate: true,
+        bloodType: true,
+        residenceCity: true,
+        address: true,
+        profession: true,
         biography: true,
         notes: true,
+        photoUrl: true,
         visibilityLevel: true,
       },
     }),
@@ -43,7 +52,8 @@ export default async function EditPersonPage({ params }: Props) {
   if (!person) notFound();
 
   const isFamilyAdmin = isSystemAdmin || !!adminAssignment;
-  if (!isFamilyAdmin) notFound();
+  // Members (non-admins) can access in "suggest edit" mode — actions route to EditRequest
+  const isSuggestMode = !isFamilyAdmin;
 
   // Fetch family persons + linked IN_LAW persons + this person's marriages in parallel
   const rawFamilyLinks = await db.familyLink.findMany({
@@ -131,8 +141,19 @@ export default async function EditPersonPage({ params }: Props) {
         >
           <ArrowRight className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-bold text-foreground">تعديل بيانات الفرد</h1>
+        <h1 className="text-xl font-bold text-foreground">
+          {isSuggestMode ? "اقتراح تعديل" : "تعديل بيانات الفرد"}
+        </h1>
       </div>
+
+      {/* لافتة وضع الاقتراح */}
+      {isSuggestMode && (
+        <div className="rounded-lg border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-muted-foreground flex gap-3">
+          <span className="text-accent mt-0.5">ℹ</span>
+          <span>أنت تعمل بوضع الاقتراح — تعديلاتك ستُرسل لمسؤول العائلة للمراجعة قبل تطبيقها.</span>
+        </div>
+      )}
+
       <EditPersonForm person={person} familyId={id} />
 
       {/* Parent / Child relations */}

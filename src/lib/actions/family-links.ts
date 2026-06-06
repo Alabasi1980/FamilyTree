@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { createNotifications, getActiveFamilyAdminUserIds, getSystemAdminUserIds } from "@/lib/notifications";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Propose a link between two families  (PENDING until system admin approves)
@@ -35,8 +36,8 @@ export async function proposeFamilyLink(
 
   // Verify both families exist
   const [famA, famB] = await Promise.all([
-    db.family.findUnique({ where: { id: familyAId, deletedAt: null }, select: { id: true } }),
-    db.family.findUnique({ where: { id: familyBId, deletedAt: null }, select: { id: true } }),
+    db.family.findUnique({ where: { id: familyAId, deletedAt: null }, select: { id: true, name: true } }),
+    db.family.findUnique({ where: { id: familyBId, deletedAt: null }, select: { id: true, name: true } }),
   ]);
   if (!famA || !famB) return { success: false, error: "إحدى العائلتين غير موجودة" };
 
@@ -57,21 +58,38 @@ export async function proposeFamilyLink(
   // System admin creates directly as APPROVED; family admin proposes as PENDING
   const status = isSystemAdmin ? "APPROVED" : "PENDING";
 
+  let linkId = existing?.id;
   if (existing && existing.deletedAt) {
     // Restore the previously-deleted link instead of creating a duplicate
-    await db.familyLink.update({
+    const restored = await db.familyLink.update({
       where: { id: existing.id },
       data: { deletedAt: null, status, linkType, description: description?.trim() ?? null },
+      select: { id: true },
     });
+    linkId = restored.id;
   } else {
-    await db.familyLink.create({
+    const created = await db.familyLink.create({
       data: { familyAId: normA, familyBId: normB, linkType, description: description?.trim() ?? null, status },
+      select: { id: true },
+    });
+    linkId = created.id;
+  }
+
+  if (!isSystemAdmin && linkId) {
+    const systemAdmins = await getSystemAdminUserIds();
+    await createNotifications(systemAdmins.filter((userId) => userId !== session.user.id), {
+      type: "REQUEST_SUBMITTED",
+      title: "طلب ربط عائلتين جديد",
+      body: `طلب ربط بين ${famA.name} و${famB.name} ينتظر مراجعة مدير النظام.`,
+      href: "/admin/families",
+      metadata: { linkId, familyAId: normA, familyBId: normB, linkType },
     });
   }
 
   revalidatePath(`/dashboard/families/${familyAId}`);
   revalidatePath(`/dashboard/families/${familyBId}`);
   if (isSystemAdmin) revalidatePath("/admin/families");
+  revalidatePath("/dashboard/notifications");
   return { success: true };
 }
 
@@ -89,7 +107,10 @@ export async function approveFamilyLink(
 
   const link = await db.familyLink.findUnique({
     where: { id: linkId },
-    select: { familyAId: true, familyBId: true, status: true },
+    include: {
+      familyA: { select: { name: true } },
+      familyB: { select: { name: true } },
+    },
   });
   if (!link || link.status !== "PENDING") {
     return { success: false, error: "الطلب غير موجود أو ليس معلقاً" };
@@ -97,9 +118,22 @@ export async function approveFamilyLink(
 
   await db.familyLink.update({ where: { id: linkId }, data: { status: "APPROVED" } });
 
+  const [adminsA, adminsB] = await Promise.all([
+    getActiveFamilyAdminUserIds(link.familyAId),
+    getActiveFamilyAdminUserIds(link.familyBId),
+  ]);
+  await createNotifications([...adminsA, ...adminsB].filter((userId) => userId !== session.user.id), {
+    type: "REQUEST_APPROVED",
+    title: "تم قبول ربط عائلتين",
+    body: `تم قبول الربط بين ${link.familyA.name} و${link.familyB.name}.`,
+    href: `/dashboard/families/${link.familyAId}`,
+    metadata: { linkId, familyAId: link.familyAId, familyBId: link.familyBId },
+  });
+
   revalidatePath(`/dashboard/families/${link.familyAId}`);
   revalidatePath(`/dashboard/families/${link.familyBId}`);
   revalidatePath("/admin/families");
+  revalidatePath("/dashboard/notifications");
   return { success: true };
 }
 
@@ -117,7 +151,10 @@ export async function rejectFamilyLink(
 
   const link = await db.familyLink.findUnique({
     where: { id: linkId },
-    select: { familyAId: true, familyBId: true, status: true },
+    include: {
+      familyA: { select: { name: true } },
+      familyB: { select: { name: true } },
+    },
   });
   if (!link || link.status !== "PENDING") {
     return { success: false, error: "الطلب غير موجود أو ليس معلقاً" };
@@ -128,9 +165,22 @@ export async function rejectFamilyLink(
     data: { status: "REJECTED", deletedAt: new Date() },
   });
 
+  const [adminsA, adminsB] = await Promise.all([
+    getActiveFamilyAdminUserIds(link.familyAId),
+    getActiveFamilyAdminUserIds(link.familyBId),
+  ]);
+  await createNotifications([...adminsA, ...adminsB].filter((userId) => userId !== session.user.id), {
+    type: "REQUEST_REJECTED",
+    title: "تم رفض ربط عائلتين",
+    body: `تم رفض الربط بين ${link.familyA.name} و${link.familyB.name}.`,
+    href: `/dashboard/families/${link.familyAId}`,
+    metadata: { linkId, familyAId: link.familyAId, familyBId: link.familyBId },
+  });
+
   revalidatePath(`/dashboard/families/${link.familyAId}`);
   revalidatePath(`/dashboard/families/${link.familyBId}`);
   revalidatePath("/admin/families");
+  revalidatePath("/dashboard/notifications");
   return { success: true };
 }
 
@@ -274,4 +324,35 @@ export async function removeFamilyLink(linkId: string): Promise<{ success: boole
   revalidatePath(`/family/${link.familyA.slug}`);
   revalidatePath(`/family/${link.familyB.slug}`);
   return { success: true };
+}
+
+// ── List families available for linking (not yet linked) ──────────────────────
+
+export async function listFamiliesForLinking(
+  currentFamilyId: string
+): Promise<Array<{ id: string; name: string; slug: string }>> {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const existingLinks = await db.familyLink.findMany({
+    where: {
+      deletedAt: null,
+      status: { in: ["APPROVED", "PENDING"] },
+      OR: [{ familyAId: currentFamilyId }, { familyBId: currentFamilyId }],
+    },
+    select: { familyAId: true, familyBId: true },
+  });
+
+  const alreadyLinkedIds = new Set<string>([currentFamilyId]);
+  existingLinks.forEach((l) => {
+    alreadyLinkedIds.add(l.familyAId);
+    alreadyLinkedIds.add(l.familyBId);
+  });
+
+  return db.family.findMany({
+    where: { deletedAt: null, id: { notIn: [...alreadyLinkedIds] } },
+    select: { id: true, name: true, slug: true },
+    orderBy: { name: "asc" },
+    take: 100,
+  });
 }

@@ -3,11 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Loader2, Info, MapPin } from "lucide-react";
+import { ArrowRight, Loader2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createFamilyRequest } from "@/lib/actions/families";
 import { withBasePath } from "@/lib/base-path";
+import { SimilarFamiliesSection } from "@/components/families/similar-families-section";
+import { HomelandPlaceSelector } from "@/components/homelands/homeland-place-selector";
 
 const labels = {
   title:
@@ -58,6 +60,7 @@ export default function NewFamilyPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [familyName, setFamilyName] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -78,6 +81,7 @@ export default function NewFamilyPage() {
           | "LIKELY"
           | "UNDOCUMENTED"
           | "UNSPECIFIED",
+        homelandPlaceId: form.get("homelandPlaceId") as string,
       });
 
       if (!result.success) {
@@ -118,24 +122,19 @@ export default function NewFamilyPage() {
             required
             minLength={2}
             className="bg-card/60"
+            value={familyName}
+            onChange={(e) => setFamilyName(e.target.value)}
           />
         </div>
 
+        <SimilarFamiliesSection name={familyName} isLoggedIn={true} />
+
         <div className="rounded-lg border border-border/50 bg-card/40 p-4 space-y-4">
-          <div className="flex items-start gap-2">
-            <MapPin className="h-4 w-4 shrink-0 mt-1 text-accent" />
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">{labels.homeland}</h2>
-              <p className="mt-1 text-xs leading-6 text-muted-foreground">{labels.homelandHint}</p>
-            </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">{labels.homeland}</h2>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">{labels.homelandHint}</p>
           </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field name="homelandCountry" label={labels.country} placeholder={labels.countryPlaceholder} />
-            <Field name="homelandRegion" label={labels.region} placeholder={labels.regionPlaceholder} />
-            <Field name="homelandCity" label={labels.city} placeholder={labels.cityPlaceholder} />
-          </div>
-
+          <HomelandPlaceSelector compact />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{labels.confidence}</label>

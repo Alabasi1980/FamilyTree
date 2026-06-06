@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { FamilyNetwork } from "@/components/tree/family-network";
 import type { FamilyNetworkResult } from "@/lib/network/get-family-network";

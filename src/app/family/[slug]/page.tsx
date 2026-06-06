@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { FamilyTree } from "@/components/tree/family-tree";
 import { FamilyLinksSection } from "@/components/families/family-links-section";
+import { JoinAdminRequestButton } from "@/components/families/join-admin-request-button";
 import { Badge } from "@/components/ui/badge";
 import { Users, TreePine, Globe, Lock, Settings, MapPin } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
@@ -21,6 +22,13 @@ export default async function FamilyPublicPage({ params }: Props) {
   const userId = session?.user?.id ?? null;
   const isSystemAdmin = session?.user?.accountType === "SYSTEM_ADMIN";
   const isLoggedIn = !!userId;
+  const viewer = userId
+    ? await db.user.findUnique({
+        where: { id: userId },
+        select: { linkedPersonId: true, email: true, phone: true },
+      })
+    : null;
+  const userLinkedPersonId = viewer?.linkedPersonId ?? null;
 
   // 1. Fetch family (no persons yet — need to determine viewer role first)
   const family = await db.family.findFirst({
@@ -35,6 +43,7 @@ export default async function FamilyPublicPage({ params }: Props) {
       homelandRegion: true,
       homelandCity: true,
       homelandConfidence: true,
+      hideFemaleMembersFromPublic: true,
       _count: { select: { persons: true } },
     },
   });
@@ -53,6 +62,19 @@ export default async function FamilyPublicPage({ params }: Props) {
         where: { familyId: family.id, userId: userId!, isActive: true },
       })));
 
+  // Check for a pending "join admin" request from this viewer
+  const hasPendingJoinRequest =
+    isLoggedIn && !isFamilyAdmin
+      ? !!(await db.adminRequest.findFirst({
+          where: {
+            submittedByUserId: userId!,
+            targetFamilyId: family.id,
+            requestType: "JOIN_FAMILY_ADMINS",
+            status: "PENDING",
+          },
+        }))
+      : false;
+
   // 3. Build visibility filter based on access level
   //    PUBLIC      → everyone
   //    MEMBER      → logged-in users (any role)
@@ -66,19 +88,31 @@ export default async function FamilyPublicPage({ params }: Props) {
 
 
   // 4. Fetch persons with correct filter
+  // hideFemaleMembersFromPublic: hide female persons from non-admin/non-member visitors
+  const hideFemale = family.hideFemaleMembersFromPublic && !isFamilyAdmin;
   const persons = await db.person.findMany({
     where: {
       familyId: family.id,
       deletedAt: null,
       visibilityLevel: { in: allowedVisibilities as ("PUBLIC" | "MEMBER" | "ADMIN" | "SHARED_LINK")[] },
+      ...(hideFemale ? { NOT: { gender: "FEMALE" } } : {}),
     },
     select: {
       id: true,
       fullName: true,
+      kunya: true,
       gender: true,
       isLiving: true,
+      birthYear: true,
       birthDate: true,
+      birthPlace: true,
+      deathYear: true,
       deathDate: true,
+      bloodType: true,
+      residenceCity: true,
+      address: true,
+      profession: true,
+      photoUrl: true,
       biography: true,
       notes: true,
     },
@@ -136,10 +170,19 @@ export default async function FamilyPublicPage({ params }: Props) {
           select: {
             id: true,
             fullName: true,
+            kunya: true,
             gender: true,
             isLiving: true,
+            birthYear: true,
             birthDate: true,
+            birthPlace: true,
+            deathYear: true,
             deathDate: true,
+            bloodType: true,
+            residenceCity: true,
+            address: true,
+            profession: true,
+            photoUrl: true,
             familyId: true,
           },
           orderBy: { fullName: "asc" },
@@ -147,10 +190,19 @@ export default async function FamilyPublicPage({ params }: Props) {
       : Promise.resolve([] as Array<{
           id: string;
           fullName: string;
+          kunya: string | null;
           gender: "MALE" | "FEMALE";
           isLiving: boolean;
+          birthYear: number | null;
           birthDate: Date | null;
+          birthPlace: string | null;
+          deathYear: number | null;
           deathDate: Date | null;
+          bloodType: string | null;
+          residenceCity: string | null;
+          address: string | null;
+          profession: string | null;
+          photoUrl: string | null;
           familyId: string;
         }>),
     db.marriageRelation.findMany({
@@ -176,10 +228,19 @@ export default async function FamilyPublicPage({ params }: Props) {
   const personsForTree = persons.map((p) => ({
     id: p.id,
     fullName: p.fullName,
+    kunya: p.kunya ?? null,
     gender: p.gender,
     isLiving: p.isLiving,
+    birthYear: p.birthYear ?? null,
     birthDate: p.birthDate?.toISOString() ?? null,
+    birthPlace: p.birthPlace ?? null,
+    deathYear: p.deathYear ?? null,
     deathDate: p.deathDate?.toISOString() ?? null,
+    bloodType: p.bloodType ?? null,
+    residenceCity: p.residenceCity ?? null,
+    address: p.address ?? null,
+    profession: p.profession ?? null,
+    photoUrl: p.photoUrl ?? null,
     biography: p.biography ?? null,
     notes: p.notes ?? null,
   }));
@@ -201,10 +262,19 @@ export default async function FamilyPublicPage({ params }: Props) {
     return {
       id: p.id,
       fullName: p.fullName,
+      kunya: p.kunya ?? null,
       gender: p.gender,
       isLiving: p.isLiving,
+      birthYear: p.birthYear ?? null,
       birthDate: p.birthDate?.toISOString() ?? null,
+      birthPlace: p.birthPlace ?? null,
+      deathYear: p.deathYear ?? null,
       deathDate: p.deathDate?.toISOString() ?? null,
+      bloodType: p.bloodType ?? null,
+      residenceCity: p.residenceCity ?? null,
+      address: p.address ?? null,
+      profession: p.profession ?? null,
+      photoUrl: p.photoUrl ?? null,
       biography: null as string | null,
       notes: null as string | null,
       sourceFamilyId: p.familyId,
@@ -283,6 +353,15 @@ export default async function FamilyPublicPage({ params }: Props) {
                     <span className="hidden sm:inline">إدارة</span>
                   </Link>
                 )}
+                {/* زر طلب إدارة العائلة للمستخدمين المسجّلين غير المسؤولين */}
+                {isLoggedIn && !isFamilyAdmin && (
+                  <JoinAdminRequestButton
+                    familyId={family.id}
+                    hasPendingRequest={hasPendingJoinRequest}
+                    initialContactEmail={viewer?.email}
+                    initialContactPhone={viewer?.phone}
+                  />
+                )}
               </div>
             </div>
 
@@ -325,6 +404,9 @@ export default async function FamilyPublicPage({ params }: Props) {
               relations={relationsForTree}
               marriages={marriagesForTree}
               canManage={isFamilyAdmin}
+              isSystemAdmin={isSystemAdmin}
+              isLoggedIn={isLoggedIn}
+              userLinkedPersonId={userLinkedPersonId}
               familyId={family.id}
               familySlug={family.slug}
               linkedPersons={linkedPersonsForTree}

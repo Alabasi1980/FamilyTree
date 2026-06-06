@@ -2,20 +2,92 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Plus, Users, Globe, Lock, ExternalLink, MapPin } from "lucide-react";
+import { ArrowRight, Plus, Globe, Lock, ExternalLink, MapPin, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FamilySettingsForm } from "@/components/families/family-settings-form";
-import { PersonsList } from "@/components/persons/persons-list";
-import ShareLinkManager from "@/components/families/share-link-manager";
-import FamilyLinkManager from "@/components/families/family-link-manager";
-import BranchUnificationManager from "@/components/families/branch-unification-manager";
-import MarriageManager from "@/components/persons/marriage-manager";
 import { formatFamilyHomeland } from "@/lib/family-homeland";
+import { FamilyDetailTabs } from "@/components/families/family-detail-tabs";
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+type FamilyPerson = {
+  id: string;
+  fullName: string;
+  birthYear: number | null;
+  birthDate: Date | null;
+};
+
+type FamilyRelation = {
+  parentPersonId: string;
+  childPersonId: string;
+};
+
+function buildGenerationMap(
+  persons: FamilyPerson[],
+  relations: FamilyRelation[],
+  marriages: { personAId: string; personBId: string }[],
+) {
+  const ids = new Set(persons.map((p) => p.id));
+  const childrenByParent = new Map<string, string[]>();
+  const parentCount = new Map<string, number>();
+
+  for (const person of persons) parentCount.set(person.id, 0);
+  for (const relation of relations) {
+    if (!ids.has(relation.parentPersonId) || !ids.has(relation.childPersonId)) continue;
+    childrenByParent.set(relation.parentPersonId, [
+      ...(childrenByParent.get(relation.parentPersonId) ?? []),
+      relation.childPersonId,
+    ]);
+    parentCount.set(relation.childPersonId, (parentCount.get(relation.childPersonId) ?? 0) + 1);
+  }
+
+  const roots = persons
+    .filter((person) => (parentCount.get(person.id) ?? 0) === 0)
+    .sort(comparePersonBasic);
+  const generation = new Map<string, number>();
+  const queue = roots.map((person) => ({ id: person.id, depth: 0 }));
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const previous = generation.get(current.id);
+    if (previous !== undefined && previous <= current.depth) continue;
+    generation.set(current.id, current.depth);
+    for (const childId of childrenByParent.get(current.id) ?? []) {
+      queue.push({ id: childId, depth: current.depth + 1 });
+    }
+  }
+
+  const fallbackDepth = Math.max(0, ...Array.from(generation.values())) + 1;
+  for (const person of persons) {
+    if (!generation.has(person.id)) generation.set(person.id, fallbackDepth);
+  }
+
+  // Fix: spouses with no parents in this family should appear at same level as their spouse,
+  // not at generation 0 (which is reserved for the family founders).
+  for (const m of marriages) {
+    if (!ids.has(m.personAId) || !ids.has(m.personBId)) continue;
+    const pcA = parentCount.get(m.personAId) ?? 0;
+    const pcB = parentCount.get(m.personBId) ?? 0;
+    const genA = generation.get(m.personAId)!;
+    const genB = generation.get(m.personBId)!;
+    if (pcA === 0 && pcB > 0) generation.set(m.personAId, genB);
+    else if (pcB === 0 && pcA > 0) generation.set(m.personBId, genA);
+  }
+
+  return generation;
+}
+
+function comparePersonBasic(a: FamilyPerson, b: FamilyPerson) {
+  const ay = a.birthYear ?? a.birthDate?.getFullYear() ?? 9999;
+  const by = b.birthYear ?? b.birthDate?.getFullYear() ?? 9999;
+  if (ay !== by) return ay - by;
+  return a.fullName.localeCompare(b.fullName, "ar");
+}
+
+function generationLabel(index: number) {
+  return index === 0 ? "الجيل الأول" : `الجيل ${index + 1}`;
 }
 
 export default async function FamilyDetailPage({ params }: Props) {
@@ -34,15 +106,25 @@ export default async function FamilyDetailPage({ params }: Props) {
       },
       persons: {
         where: { deletedAt: null },
-        orderBy: [{ isLiving: "desc" }, { fullName: "asc" }],
-        take: 50,
+        orderBy: [{ birthYear: "asc" }, { birthDate: "asc" }, { fullName: "asc" }],
         select: {
           id: true,
           fullName: true,
+          kunya: true,
           gender: true,
           isLiving: true,
+          birthYear: true,
           birthDate: true,
+          birthPlace: true,
+          deathYear: true,
           deathDate: true,
+          bloodType: true,
+          residenceCity: true,
+          address: true,
+          profession: true,
+          biography: true,
+          notes: true,
+          photoUrl: true,
           visibilityLevel: true,
         },
       },
@@ -113,32 +195,46 @@ export default async function FamilyDetailPage({ params }: Props) {
   const inLawLinks = familyLinks.filter((l) => l.linkType === "IN_LAW" && l.status === "APPROVED");
   const inLawFamilyIds = inLawLinks.map((l) => l.familyId);
 
-  const linkedPersons = inLawFamilyIds.length > 0
-    ? await db.person.findMany({
-        where: { familyId: { in: inLawFamilyIds }, deletedAt: null },
-        select: { id: true, fullName: true, familyId: true },
-        orderBy: { fullName: "asc" },
-      })
-    : [];
+  const [familyRelations, rawMarriages, linkedPersons] = await Promise.all([
+    personIds.length
+      ? db.parentChildRelation.findMany({
+          where: { parentPersonId: { in: personIds }, childPersonId: { in: personIds } },
+          select: { parentPersonId: true, childPersonId: true },
+        })
+      : Promise.resolve([]),
+    db.marriageRelation.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ personAId: { in: personIds } }, { personBId: { in: personIds } }],
+      },
+      select: { id: true, personAId: true, personBId: true, marriageDate: true, status: true, divorceDate: true },
+    }),
+    inLawFamilyIds.length > 0
+      ? db.person.findMany({
+          where: { familyId: { in: inLawFamilyIds }, deletedAt: null },
+          select: { id: true, fullName: true, familyId: true },
+          orderBy: { fullName: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
 
-  // Marriages: any marriage where at least one person is from this family
-  const rawMarriages = await db.marriageRelation.findMany({
-    where: {
-      deletedAt: null,
-      OR: [
-        { personAId: { in: personIds } },
-        { personBId: { in: personIds } },
-      ],
-    },
-    select: {
-      id: true,
-      personAId: true,
-      personBId: true,
-      marriageDate: true,
-      status: true,
-      divorceDate: true,
-    },
-  });
+  // Build generation map now that marriages are available (fixes spouse generation level)
+  const generationMap = buildGenerationMap(family.persons, familyRelations, rawMarriages);
+  const orderedPersons = [...family.persons]
+    .sort((a, b) => {
+      const ag = generationMap.get(a.id) ?? 999;
+      const bg = generationMap.get(b.id) ?? 999;
+      if (ag !== bg) return ag - bg;
+      return comparePersonBasic(a, b);
+    })
+    .map((person) => {
+      const generationIndex = generationMap.get(person.id) ?? 0;
+      return {
+        ...person,
+        generationIndex,
+        generationLabel: generationLabel(generationIndex),
+      };
+    });
 
   // Combined name map: current family + linked persons
   const personMap = new Map<string, string>([
@@ -155,6 +251,21 @@ export default async function FamilyDetailPage({ params }: Props) {
     status: m.status,
     divorceDate: m.divorceDate,
   }));
+
+  // Pending JOIN_FAMILY_ADMINS requests for this family
+  const pendingJoinRequests = await db.adminRequest.findMany({
+    where: { targetFamilyId: id, requestType: "JOIN_FAMILY_ADMINS", status: "PENDING" },
+    select: {
+      id: true,
+      submittedByUserId: true,
+      applicantRelationship: true,
+      applicantMessage: true,
+      applicantContactEmail: true,
+      applicantContactPhone: true,
+      submittedBy: { select: { fullName: true, email: true, phone: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
   // Build linkedPersonsForMarriage with family name for the dropdown
   const linkedPersonsForManager = linkedPersons.map((p) => ({
@@ -196,135 +307,69 @@ export default async function FamilyDetailPage({ params }: Props) {
               العرض العام
             </Link>
           </Button>
-          <Button variant="gold" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild>
             <Link href={`/dashboard/families/${id}/add-person`}>
               <Plus className="h-4 w-4 ml-1" />
               إضافة فرد
             </Link>
           </Button>
+          <Button variant="gold" size="sm" asChild>
+            <Link href={`/dashboard/families/${id}/build`}>
+              <Sparkles className="h-4 w-4 ml-1" />
+              البناء السريع
+            </Link>
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Persons list */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                أفراد العائلة ({family._count.persons})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <PersonsList persons={family.persons} familyId={id} canManage={isFamilyAdmin} />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Settings */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">إعدادات العائلة</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FamilySettingsForm
-                familyId={id}
-                initialData={{
-                  name: family.name,
-                  originSummary: family.originSummary ?? "",
-                  isPublic: family.isPublic,
-                  homelandCountry: family.homelandCountry ?? "",
-                  homelandRegion: family.homelandRegion ?? "",
-                  homelandCity: family.homelandCity ?? "",
-                  homelandNote: family.homelandNote ?? "",
-                  homelandConfidence: family.homelandConfidence,
-                }}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Share Links */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">روابط المشاركة</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ShareLinkManager
-                familyId={id}
-                links={shareLinks.map((l) => ({
-                  id: l.id,
-                  token: l.token,
-                  hasPassword: !!l.passwordHash,
-                  expiresAt: l.expiresAt,
-                  createdAt: l.createdAt,
-                }))}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Family Links */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">ربط العائلات</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FamilyLinkManager
-                currentFamilyId={id}
-                isSystemAdmin={isSystemAdmin}
-                links={familyLinks}
-                otherFamilies={otherFamilies}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Branch Unification */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">توحيد فرعين</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BranchUnificationManager
-                currentFamilyId={id}
-                currentPersons={family.persons.map((p) => ({ id: p.id, fullName: p.fullName }))}
-                targetFamilies={branchTargetFamilies}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Marriages */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">الزيجات</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <MarriageManager
-                familyId={id}
-                persons={family.persons.map((p) => ({ id: p.id, fullName: p.fullName }))}
-                linkedPersons={linkedPersonsForManager}
-                marriages={marriages}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Admins */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">المسؤولون</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {family.adminAssignments.map((a) => (
-                <div key={a.id} className="flex items-center gap-2 text-sm">
-                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-accent">
-                    {(a.user.fullName ?? a.user.email ?? "?")[0]}
-                  </div>
-                  <span className="text-foreground">{a.user.fullName ?? a.user.email ?? "مستخدم"}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <FamilyDetailTabs
+        familyId={id}
+        isFamilyAdmin={isFamilyAdmin}
+        isSystemAdmin={isSystemAdmin}
+        totalPersonCount={family._count.persons}
+        orderedPersons={orderedPersons}
+        familySettings={{
+          name: family.name,
+          originSummary: family.originSummary ?? "",
+          isPublic: family.isPublic,
+          hideFemaleMembersFromPublic: family.hideFemaleMembersFromPublic,
+          homelandCountry: family.homelandCountry ?? "",
+          homelandRegion: family.homelandRegion ?? "",
+          homelandCity: family.homelandCity ?? "",
+          homelandNote: family.homelandNote ?? "",
+          homelandConfidence: family.homelandConfidence,
+          homelandPlaceId: family.homelandPlaceId,
+        }}
+        shareLinks={shareLinks.map((l) => ({
+          id: l.id,
+          token: l.token,
+          hasPassword: !!l.passwordHash,
+          expiresAt: l.expiresAt,
+          createdAt: l.createdAt,
+        }))}
+        familyLinks={familyLinks}
+        otherFamilies={otherFamilies}
+        branchTargetFamilies={branchTargetFamilies}
+        marriages={marriages}
+        linkedPersons={linkedPersonsForManager}
+        admins={family.adminAssignments.map((a) => ({
+          id: a.id,
+          userId: a.user.id,
+          displayName: a.user.fullName ?? a.user.email ?? "مستخدم",
+          email: a.user.email,
+          isCurrentUser: a.user.id === user.id,
+        }))}
+        pendingJoinRequests={pendingJoinRequests.map((r) => ({
+          id: r.id,
+          submittedByUserId: r.submittedByUserId,
+          submitterName: r.submittedBy.fullName ?? r.submittedBy.email ?? "مستخدم",
+          relationship: r.applicantRelationship,
+          message: r.applicantMessage,
+          contactEmail: r.applicantContactEmail ?? r.submittedBy.email,
+          contactPhone: r.applicantContactPhone ?? r.submittedBy.phone,
+        }))}
+        userId={user.id}
+      />
     </div>
   );
 }

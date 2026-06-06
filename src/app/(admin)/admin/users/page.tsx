@@ -23,7 +23,11 @@ export default async function AdminUsersPage() {
       phone: true,
       accountType: true,
       createdAt: true,
-      _count: { select: { familyAdminAssignments: true } },
+      familyAdminAssignments: {
+        where: { isActive: true },
+        select: { family: { select: { name: true } } },
+        take: 5,
+      },
     },
   });
 
@@ -41,24 +45,39 @@ export default async function AdminUsersPage() {
         <CardContent className="p-0">
           <ul className="divide-y divide-border/40">
             {users.map((user) => (
-              <li key={user.id} className="flex items-center justify-between px-6 py-3 gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-accent shrink-0">
-                    {(user.fullName ?? user.name ?? user.email ?? "?")[0].toUpperCase()}
+              <li key={user.id} className="px-6 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-accent shrink-0">
+                      {(user.fullName ?? user.name ?? user.email ?? "?")[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{user.fullName ?? user.name ?? user.email ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user.email ?? user.phone ?? "—"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{user.fullName ?? user.name ?? user.email ?? "—"}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user.email ?? user.phone ?? "—"}
-                    </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="hidden items-center gap-1.5 sm:flex">
+                      <Badge variant={roleLabels[user.accountType].variant}>
+                        {roleLabels[user.accountType].label}
+                      </Badge>
+                      {user.familyAdminAssignments.length > 0 && (
+                        <Badge variant="admin">
+                          مسؤول عائلة
+                          {user.familyAdminAssignments.length > 1 ? ` (${user.familyAdminAssignments.length})` : ""}
+                        </Badge>
+                      )}
+                    </div>
+                    <ChangeUserRoleButton userId={user.id} currentRole={user.accountType} />
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={roleLabels[user.accountType].variant} className="hidden sm:inline-flex">
-                    {roleLabels[user.accountType].label}
-                  </Badge>
-                  <ChangeUserRoleButton userId={user.id} currentRole={user.accountType} />
-                </div>
+                {user.familyAdminAssignments.length > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    يدير: {user.familyAdminAssignments.map((a) => a.family.name).join("، ")}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
