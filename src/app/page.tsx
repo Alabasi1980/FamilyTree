@@ -49,14 +49,14 @@ async function FamiliesGarden({ isLoggedIn }: { isLoggedIn: boolean }) {
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <Link
-            href={withBasePath("/search")}
+            href="/search"
             className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-4 py-2.5 text-sm text-foreground hover:border-accent/40 hover:bg-card/80 transition-all"
           >
             <Search className="h-4 w-4 text-accent" />
             ابحث عن عائلة
           </Link>
           <Link
-            href={withBasePath(isLoggedIn ? "/dashboard/families/new" : "/register")}
+            href={isLoggedIn ? "/dashboard/families/new" : "/register"}
             className="flex items-center gap-2 rounded-lg bg-accent/20 border border-accent/30 px-4 py-2.5 text-sm text-accent hover:bg-accent/30 transition-all"
           >
             <UserPlus className="h-4 w-4" />

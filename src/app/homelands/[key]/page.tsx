@@ -74,7 +74,7 @@ export default async function HomelandPage({ params }: Props) {
           <div className="container relative mx-auto max-w-6xl px-4 py-14 md:py-20">
             {/* رجوع */}
             <Link
-              href={withBasePath("/")}
+              href="/"
               className="mb-8 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowRight className="h-3.5 w-3.5" />

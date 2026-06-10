@@ -78,7 +78,7 @@ export default function NewFamilyPage() {
               <div className="flex justify-center gap-3 pt-2">
                 <Button
                   variant="gold"
-                  onClick={() => router.push(withBasePath(`/dashboard/families/${successResult.familyId}`))}
+                  onClick={() => router.push(`/dashboard/families/${successResult.familyId}`)}
                 >
                   <TreePine className="h-4 w-4 ml-2" />
                   افتح العائلة
@@ -95,14 +95,14 @@ export default function NewFamilyPage() {
               <div className="flex justify-center gap-3 pt-2">
                 <Button
                   variant="outline"
-                  onClick={() => router.push(withBasePath("/dashboard/requests"))}
+                  onClick={() => router.push("/dashboard/requests")}
                 >
                   <ClipboardList className="h-4 w-4 ml-2" />
                   متابعة حالة الطلب
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => router.push(withBasePath("/dashboard"))}
+                  onClick={() => router.push("/dashboard")}
                 >
                   العودة للوحة التحكم
                 </Button>

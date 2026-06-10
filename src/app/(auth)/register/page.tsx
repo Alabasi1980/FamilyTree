@@ -41,7 +41,7 @@ export default function RegisterPage() {
         redirect: false,
       });
 
-      router.push(withBasePath("/dashboard?welcome=1"));
+      router.push("/dashboard?welcome=1");
       router.refresh();
     });
   }

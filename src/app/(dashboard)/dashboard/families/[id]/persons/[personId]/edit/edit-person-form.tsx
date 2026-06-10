@@ -78,7 +78,7 @@ export default function EditPersonForm({ person, familyId }: Props) {
         return;
       }
 
-      router.push(withBasePath(`/dashboard/families/${familyId}`));
+      router.push(`/dashboard/families/${familyId}`);
     });
   }
 

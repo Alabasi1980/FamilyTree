@@ -48,7 +48,7 @@ export default function SignOutPage() {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() => router.push(withBasePath("/"))}
+            onClick={() => router.push("/")}
           >
             العودة للرئيسية
           </Button>

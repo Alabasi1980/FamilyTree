@@ -147,7 +147,7 @@ export default async function FamilyPublicPage({ params, searchParams }: Props) 
           )}
           {!isLoggedIn && (
             <Link
-              href={withBasePath(`/login?callbackUrl=${encodeURIComponent(withBasePath(`/family/${encodeURIComponent(slug)}`))}`)}
+              href={`/login?callbackUrl=${encodeURIComponent(withBasePath(`/family/${encodeURIComponent(slug)}`))}`}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               تسجيل الدخول

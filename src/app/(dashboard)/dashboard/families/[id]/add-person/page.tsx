@@ -86,7 +86,7 @@ export default function AddPersonPage() {
             {successResult.personId && (
               <Button
                 variant="gold"
-                onClick={() => router.push(withBasePath(`/dashboard/families/${familyId}/persons/${successResult.personId}`))}
+                onClick={() => router.push(`/dashboard/families/${familyId}/persons/${successResult.personId}`)}
               >
                 عرض الفرد
               </Button>
@@ -106,7 +106,7 @@ export default function AddPersonPage() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() => router.push(withBasePath(`/dashboard/families/${familyId}`))}
+              onClick={() => router.push(`/dashboard/families/${familyId}`)}
             >
               العودة إلى العائلة
             </Button>

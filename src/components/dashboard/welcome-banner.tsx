@@ -42,7 +42,7 @@ export function WelcomeBanner({ userName }: Props) {
           ابدأ بإضافة عائلتك أو ابحث عن عائلة موجودة للانضمام إليها.
         </p>
         <Link
-          href={withBasePath("/dashboard/families/new")}
+          href="/dashboard/families/new"
           className="inline-flex items-center gap-1 mt-2 text-xs text-accent hover:underline font-medium"
         >
           إضافة عائلة الآن

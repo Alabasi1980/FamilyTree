@@ -65,7 +65,7 @@ export default function LoginPage() {
       });
 
       if (!result?.error) {
-        router.push(withBasePath("/dashboard"));
+        router.push("/dashboard");
         router.refresh();
         return;
       }
