@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RequestReviewCard } from "@/components/requests/request-review-card";
 import { BranchUnificationReviewCard } from "@/components/requests/branch-unification-review-card";
-import { ClipboardList, Send, Link2 } from "lucide-react";
+import { CrossFamilyMarriageReviewCard } from "@/components/requests/cross-family-marriage-review-card";
+import { ClipboardList, Send, Link2, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusLabels = {
@@ -44,6 +45,26 @@ const branchLabels = {
   unknown: "—",
 };
 
+type CrossFamilyMarriageStatus =
+  | "PENDING_FAMILY_A"
+  | "PENDING_FAMILY_B"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "APPLIED";
+
+const crossFamilyStatusLabels: Record<
+  CrossFamilyMarriageStatus,
+  { label: string; variant: "gold" | "public" | "private" | "secondary" }
+> = {
+  PENDING_FAMILY_A: { label: "انتظار موافقة العائلة أ", variant: "gold" },
+  PENDING_FAMILY_B: { label: "انتظار موافقة العائلة ب", variant: "gold" },
+  APPROVED:         { label: "موافق عليه",               variant: "public" },
+  APPLIED:          { label: "مُطبَّق",                   variant: "public" },
+  REJECTED:         { label: "مرفوض",                    variant: "private" },
+  CANCELLED:        { label: "ملغى",                     variant: "secondary" },
+};
+
 interface RequestsPageProps {
   searchParams: Promise<{ focus?: string | string[] }>;
 }
@@ -63,7 +84,7 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
 
   const isFamilyAdmin = isSystemAdmin || myAdminFamilyIds.length > 0;
 
-  const [editToReview, adminToReview, branchToReview] = isFamilyAdmin
+  const [editToReview, adminToReview, branchToReview, crossFamilyToReview] = isFamilyAdmin
     ? await Promise.all([
         db.editRequest.findMany({
           where: isSystemAdmin
@@ -105,10 +126,22 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
           orderBy: { createdAt: "desc" },
           take: 30,
         }),
+        db.crossFamilyMarriageRequest.findMany({
+          where: isSystemAdmin
+            ? { status: { in: ["PENDING_FAMILY_A", "PENDING_FAMILY_B"] } }
+            : {
+                OR: [
+                  { status: "PENDING_FAMILY_A", familyAId: { in: myAdminFamilyIds } },
+                  { status: "PENDING_FAMILY_B", familyBId: { in: myAdminFamilyIds } },
+                ],
+              },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
-  const [myEditRequests, myAdminRequests, myBranchRequests] = !isSystemAdmin
+  const [myEditRequests, myAdminRequests, myBranchRequests, myCrossFamilyRequests] = !isSystemAdmin
     ? await Promise.all([
         db.editRequest.findMany({
           where: { submittedByUserId: user.id },
@@ -127,9 +160,46 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
           orderBy: { createdAt: "desc" },
           take: 20,
         }),
+        db.crossFamilyMarriageRequest.findMany({
+          where: { submittedByUserId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
+  // ── Cross-family marriage lookup data ──────────────────────────────────────
+  const allCrossRequests = [...crossFamilyToReview, ...myCrossFamilyRequests];
+  const crossPersonIds = Array.from(
+    new Set(allCrossRequests.flatMap((r) => [r.personAId, r.personBId]))
+  );
+  const crossFamilyIds = Array.from(
+    new Set(allCrossRequests.flatMap((r) => [r.familyAId, r.familyBId]))
+  );
+  const crossSubmitterIds = Array.from(new Set(allCrossRequests.map((r) => r.submittedByUserId)));
+
+  const [crossPersons, crossFamilies, crossSubmitters] = await Promise.all([
+    db.person.findMany({
+      where: { id: { in: crossPersonIds.length ? crossPersonIds : ["__none__"] } },
+      select: { id: true, fullName: true, gender: true },
+    }),
+    db.family.findMany({
+      where: { id: { in: crossFamilyIds.length ? crossFamilyIds : ["__none__"] } },
+      select: { id: true, name: true },
+    }),
+    db.user.findMany({
+      where: { id: { in: crossSubmitterIds.length ? crossSubmitterIds : ["__none__"] } },
+      select: { id: true, fullName: true, name: true },
+    }),
+  ]);
+
+  const crossPersonMap = new Map(crossPersons.map((p) => [p.id, p.fullName]));
+  const crossFamilyMap = new Map(crossFamilies.map((f) => [f.id, f.name]));
+  const crossSubmitterMap = new Map(
+    crossSubmitters.map((u) => [u.id, u.fullName ?? u.name ?? "—"])
+  );
+
+  // ── Branch lookup data ──────────────────────────────────────────────────────
   const allBranchRequests = [...branchToReview, ...myBranchRequests];
   const branchFamilyIds = Array.from(
     new Set(allBranchRequests.flatMap((req) => [req.sourceFamilyId, req.targetFamilyId]))
@@ -166,7 +236,8 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
   const pendingToReviewCount =
     editToReview.filter((r) => r.status === "PENDING").length +
     adminToReview.filter((r) => r.status === "PENDING").length +
-    branchToReview.filter((r) => r.status === "PENDING").length;
+    branchToReview.filter((r) => r.status === "PENDING").length +
+    crossFamilyToReview.length;
 
   return (
     <div className="space-y-6">
@@ -186,10 +257,23 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {editToReview.length === 0 && adminToReview.length === 0 && branchToReview.length === 0 ? (
+            {editToReview.length === 0 && adminToReview.length === 0 && branchToReview.length === 0 && crossFamilyToReview.length === 0 ? (
               <p className="px-6 py-4 text-sm text-muted-foreground">لا توجد طلبات معلقة</p>
             ) : (
               <ul className="divide-y divide-border/40">
+                {crossFamilyToReview.map((req) => (
+                  <CrossFamilyRequestRow
+                    key={req.id}
+                    request={req}
+                    focusId={focusId}
+                    personMap={crossPersonMap}
+                    familyMap={crossFamilyMap}
+                    submitterMap={crossSubmitterMap}
+                    reviewCard={
+                      <CrossFamilyMarriageReviewCard requestId={req.id} />
+                    }
+                  />
+                ))}
                 {adminToReview.map((req) => (
                   <RequestRow
                     key={req.id}
@@ -287,10 +371,21 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {myAdminRequests.length === 0 && myEditRequests.length === 0 && myBranchRequests.length === 0 ? (
+            {myAdminRequests.length === 0 && myEditRequests.length === 0 && myBranchRequests.length === 0 && myCrossFamilyRequests.length === 0 ? (
               <p className="px-6 py-4 text-sm text-muted-foreground">لم تقدم أي طلبات بعد</p>
             ) : (
               <ul className="divide-y divide-border/40">
+                {myCrossFamilyRequests.map((req) => (
+                  <CrossFamilyRequestRow
+                    key={req.id}
+                    request={req}
+                    focusId={focusId}
+                    personMap={crossPersonMap}
+                    familyMap={crossFamilyMap}
+                    submitterMap={crossSubmitterMap}
+                    reviewCard={null}
+                  />
+                ))}
                 {myAdminRequests.map((req) => (
                   <RequestRow
                     key={req.id}
@@ -350,6 +445,71 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
         </Card>
       )}
     </div>
+  );
+}
+
+type CrossFamilyRequest = {
+  id: string;
+  familyAId: string;
+  familyBId: string;
+  personAId: string;
+  personBId: string;
+  status: CrossFamilyMarriageStatus;
+  marriageDate: Date | null;
+  submittedByUserId: string;
+  createdAt: Date;
+};
+
+function CrossFamilyRequestRow({
+  request,
+  focusId,
+  personMap,
+  familyMap,
+  submitterMap,
+  reviewCard,
+}: {
+  request: CrossFamilyRequest;
+  focusId?: string;
+  personMap: Map<string, string>;
+  familyMap: Map<string, string>;
+  submitterMap: Map<string, string>;
+  reviewCard: ReactNode;
+}) {
+  const statusInfo = crossFamilyStatusLabels[request.status];
+  return (
+    <li
+      id={`request-${request.id}`}
+      className={cn(
+        "scroll-mt-24 flex items-start justify-between gap-3 px-6 py-3 transition-colors",
+        focusId === request.id && "bg-accent/10 ring-1 ring-inset ring-accent/30"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <Heart className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+          <p className="text-sm font-medium text-foreground">طلب زواج عابر للعائلتين</p>
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {[
+            `عائلة أ: ${familyMap.get(request.familyAId) ?? "—"}`,
+            `عائلة ب: ${familyMap.get(request.familyBId) ?? "—"}`,
+            `الطرف الأول: ${personMap.get(request.personAId) ?? "—"}`,
+            `الطرف الثاني: ${personMap.get(request.personBId) ?? "—"}`,
+            `من: ${submitterMap.get(request.submittedByUserId) ?? "—"}`,
+            request.marriageDate
+              ? `تاريخ الزواج: ${new Date(request.marriageDate).toLocaleDateString("ar")}`
+              : null,
+            new Date(request.createdAt).toLocaleDateString("ar"),
+          ]
+            .filter(Boolean)
+            .join(" • ")}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+        {reviewCard}
+      </div>
+    </li>
   );
 }
 

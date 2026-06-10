@@ -156,11 +156,11 @@ function HomelandPlotCard({
         {/* خط أرضي */}
         <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
 
-        <div className="relative flex flex-1 flex-col justify-between p-5 gap-4">
+        <div className="relative flex flex-1 flex-col justify-between p-5 gap-3">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-accent/20 bg-background/50 text-accent shadow-inner">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-background/50 text-accent shadow-inner">
                 <MapPin className="h-4.5 w-4.5" />
               </span>
               <div>
@@ -172,9 +172,15 @@ function HomelandPlotCard({
                 )}
               </div>
             </div>
-            <span className="shrink-0 rounded-full border border-border/60 bg-background/40 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
-              {plot.familyCount} {plot.familyCount === 1 ? labels.family : labels.families}
-            </span>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <span className="rounded-full border border-border/60 bg-background/40 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+                {plot.familyCount} {plot.familyCount === 1 ? labels.family : labels.families}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+                <Users className="h-3 w-3" />
+                {plot.memberCount} {labels.members}
+              </span>
+            </div>
           </div>
 
           {/* الغابة */}
@@ -182,31 +188,32 @@ function HomelandPlotCard({
             <FamilyGrove count={plot.familyCount} />
           </div>
 
-          {/* أسماء العائلات */}
+          {/* أسماء العائلات — مُحسَّنة */}
           {previewNames.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {previewNames.map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-border/40 bg-background/30 px-2.5 py-0.5 text-[11px] text-muted-foreground backdrop-blur-sm"
-                >
-                  {name}
-                </span>
-              ))}
-              {plot.familyNames.length > 5 && (
-                <span className="rounded-full border border-border/40 bg-background/30 px-2.5 py-0.5 text-[11px] text-accent/80 backdrop-blur-sm">
-                  +{plot.familyNames.length - 5}
-                </span>
-              )}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/50 mb-1.5">
+                العائلات
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {previewNames.map((name) => (
+                  <span
+                    key={name}
+                    className="rounded-full border border-border/40 bg-background/30 px-2.5 py-0.5 text-[11px] font-medium text-foreground/70 backdrop-blur-sm"
+                  >
+                    {name}
+                  </span>
+                ))}
+                {plot.familyNames.length > 5 && (
+                  <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-0.5 text-[11px] text-accent/80 backdrop-blur-sm">
+                    +{plot.familyNames.length - 5} أخرى
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border/30 pt-3">
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Users className="h-3.5 w-3.5" />
-              {plot.memberCount} {labels.members}
-            </span>
+          <div className="flex items-center justify-end border-t border-border/30 pt-3">
             <span className="flex items-center gap-1 text-xs font-medium text-accent/80 group-hover:text-accent transition-colors">
               {labels.explore}
               <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-1" />

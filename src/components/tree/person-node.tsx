@@ -119,9 +119,18 @@ export const PersonNode = memo(({ data, selected }: NodeProps) => {
               <span className="text-[10px] text-muted-foreground/60">({age})</span>
             )}
           </div>
-          {!p.isLiving && (
-            <span className="text-[9px] text-muted-foreground/50 italic">{labels.deceased}</span>
-          )}
+          <div className="flex items-center gap-1 mt-0.5">
+            {p.isLiving ? (
+              <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400/80">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
+                حي
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-sm bg-muted/50 px-1 py-0.5 text-[9px] text-muted-foreground/70">
+                {labels.deceased}
+              </span>
+            )}
+          </div>
           {firstBadge && (
             <div
               className="mt-1 flex max-w-full items-center gap-1 rounded border border-amber-400/25 bg-amber-400/10 px-1.5 py-0.5 text-[9px] text-amber-300"

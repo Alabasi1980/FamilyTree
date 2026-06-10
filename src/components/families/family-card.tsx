@@ -62,6 +62,13 @@ export function FamilyCard({
           config.card
         )}
       >
+        {/* خط جانبي يعكس حالة العامة/الخاصة */}
+        <div
+          className={cn(
+            "absolute inset-y-0 right-0 w-0.5",
+            isPublic ? "bg-green-600/50" : "bg-muted-foreground/20"
+          )}
+        />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_90%,hsl(var(--accent)/0.11),transparent_34%)]" />
         <div
           className="absolute -bottom-7 -left-7 h-32 w-32 bg-contain bg-center bg-no-repeat opacity-[0.055] transition-opacity duration-300 group-hover:opacity-[0.1]"
@@ -96,7 +103,7 @@ export function FamilyCard({
 
           <div className="mt-5">
             <h3 className="line-clamp-1 text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-accent">
-              {labels.family} {name}
+              {name}
             </h3>
             {homeland && (
               <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">

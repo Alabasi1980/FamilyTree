@@ -49,7 +49,7 @@ const personSchema = z.object({
 });
 
 export type PersonActionResult =
-  | { success: true; personId: string }
+  | { success: true; personId: string; warnings?: string[] }
   | { success: false; error: string };
 
 type ParsedPersonInput = z.infer<typeof personSchema>;
@@ -75,17 +75,32 @@ async function canManageFamily(userId: string, familyId: string, isSystemAdmin: 
 }
 
 export async function recomputeFamilyAncestry(familyId: string) {
-  const persons = await db.person.findMany({
-    where: { familyId, deletedAt: null },
-    select: { id: true },
-  });
-  const personIds = persons.map((p) => p.id);
+  // Include primary members + secondary members via PersonFamilyMembership.
+  // This ensures mahram detection works correctly across family boundaries.
+  const [primaryPersons, secondaryMemberships] = await Promise.all([
+    db.person.findMany({
+      where: { familyId, deletedAt: null },
+      select: { id: true },
+    }),
+    db.personFamilyMembership.findMany({
+      where: { familyId },
+      select: { personId: true },
+    }),
+  ]);
+
+  const personIds = [
+    ...new Set([
+      ...primaryPersons.map((p) => p.id),
+      ...secondaryMemberships.map((m) => m.personId),
+    ]),
+  ];
   if (personIds.length === 0) return;
 
   const relations = await db.parentChildRelation.findMany({
     where: {
       parentPersonId: { in: personIds },
       childPersonId: { in: personIds },
+      relationType: "BIOLOGICAL",
     },
     select: { parentPersonId: true, childPersonId: true },
   });
@@ -246,6 +261,13 @@ export async function createPerson(rawData: unknown): Promise<PersonActionResult
 
   const data = normalizePersonInput(parsed.data);
 
+  // Validate internal date consistency before writing
+  const { validatePersonChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+  const chronoResult = validatePersonChronology(data);
+  if (chronoResult.status === "PROHIBITED") {
+    return { success: false, error: chronoResult.message };
+  }
+
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
 
   if (!(await canManageFamily(session.user.id, data.familyId, isAdmin))) {
@@ -317,20 +339,41 @@ export async function addParentChildRelation(
   if (!parent || parent.deletedAt || child.deletedAt) {
     return { success: false, error: "الشخص غير موجود" };
   }
-  if (parent.familyId !== child.familyId) {
-    return { success: false, error: "لا يمكن تسجيل علاقة والد/ابن بين عائلتين مختلفتين" };
-  }
+
+  const isCrossFamily = parent.familyId !== child.familyId;
 
   const parentSlotError = await validateParentSlot(parentId, childId);
   if (parentSlotError) return { success: false, error: parentSlotError };
+
+  // Chronology: parent must not be younger than child
+  const { validateParentChildChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+  const parentChronoResult = await validateParentChildChronology(parentId, childId, db);
+  if (parentChronoResult.status === "PROHIBITED") {
+    return { success: false, error: parentChronoResult.message };
+  }
 
   if (await wouldCreateCycle(parentId, childId, child.familyId)) {
     return { success: false, error: "هذه العلاقة ستنشئ دورة غير صحيحة في النسب" };
   }
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
-  if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
-    return { success: false, error: "لا تملك صلاحية التعديل" };
+
+  if (isCrossFamily) {
+    // Cross-family links require managing BOTH families
+    const [canManageParentFamily, canManageChildFamily] = await Promise.all([
+      canManageFamily(session.user.id, parent.familyId, isAdmin),
+      canManageFamily(session.user.id, child.familyId, isAdmin),
+    ]);
+    if (!canManageParentFamily || !canManageChildFamily) {
+      return {
+        success: false,
+        error: "ربط الوالد من عائلة مختلفة يتطلب صلاحية إدارة كلتا العائلتين",
+      };
+    }
+  } else {
+    if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
+      return { success: false, error: "لا تملك صلاحية التعديل" };
+    }
   }
 
   // Create parent-child relation
@@ -340,9 +383,27 @@ export async function addParentChildRelation(
     update: {},
   });
 
-  await recomputeFamilyAncestry(child.familyId);
+  // For cross-family links: add secondary memberships so both persons
+  // appear in each other's family tree and ancestry is computed correctly.
+  if (isCrossFamily) {
+    await db.personFamilyMembership.createMany({
+      data: [
+        { id: `${parentId}-${child.familyId}`, personId: parentId, familyId: child.familyId, role: "CROSS_PARENT" },
+        { id: `${childId}-${parent.familyId}`, personId: childId, familyId: parent.familyId, role: "DESCENDANT" },
+      ],
+      skipDuplicates: true,
+    });
+    await Promise.all([
+      recomputeFamilyAncestry(parent.familyId),
+      recomputeFamilyAncestry(child.familyId),
+    ]);
+    revalidatePath(`/family/${parent.familyId}`);
+    revalidatePath(`/family/${child.familyId}`);
+  } else {
+    await recomputeFamilyAncestry(child.familyId);
+    revalidatePath(`/family/${child.familyId}`);
+  }
 
-  revalidatePath(`/family/${child.familyId}`);
   return { success: true };
 }
 
@@ -397,7 +458,24 @@ export async function updatePerson(personId: string, rawData: unknown): Promise<
   }
 
   const data = normalizeUpdatePersonInput(parsed.data);
+
+  // Validate internal date consistency
+  const { validatePersonChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+  const chronoResult = validatePersonChronology(data);
+  if (chronoResult.status === "PROHIBITED") {
+    return { success: false, error: chronoResult.message };
+  }
+
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
+
+  // Guard against gender changes that break existing relationships
+  if (data.gender && data.gender !== person.gender) {
+    const { validateGenderChange } = await import("@/lib/domain/family-rules/gender-validators");
+    const genderResult = await validateGenderChange(personId, data.gender, db);
+    if (genderResult.status === "PROHIBITED") {
+      return { success: false, error: genderResult.message };
+    }
+  }
 
   if (!(await canManageFamily(session.user.id, person.familyId, isAdmin))) {
     const request = await db.editRequest.create({
@@ -444,9 +522,28 @@ export async function updatePerson(personId: string, rawData: unknown): Promise<
     },
   });
 
+  // Retroactive date conflict check — dates were just saved; check if they
+  // conflict with existing marriages or parent-child relations.
+  // We do NOT block (data is saved), but we return warnings so the UI can
+  // surface them to the admin for manual resolution.
+  const datesChanged =
+    data.birthYear !== person.birthYear ||
+    data.deathYear !== person.deathYear ||
+    (data.birthDate ? new Date(data.birthDate).toISOString() : null) !== (person.birthDate?.toISOString() ?? null) ||
+    (data.deathDate ? new Date(data.deathDate).toISOString() : null) !== (person.deathDate?.toISOString() ?? null);
+
+  let warnings: string[] | undefined;
+  if (datesChanged && (data.birthYear || data.birthDate || data.deathYear || data.deathDate)) {
+    const { checkRetroactiveDateConflicts } = await import("@/lib/domain/family-rules/chronology-validators");
+    const conflicts = await checkRetroactiveDateConflicts(personId, data, db);
+    if (conflicts.length > 0) {
+      warnings = conflicts.map((c) => c.message);
+    }
+  }
+
   revalidatePath(`/dashboard/families/${person.familyId}`);
   revalidatePath(`/family/${person.familyId}`);
-  return { success: true, personId };
+  return { success: true, personId, ...(warnings ? { warnings } : {}) };
 }
 
 export async function deletePerson(personId: string): Promise<{ success: boolean; error?: string }> {
@@ -470,11 +567,12 @@ export async function deletePerson(personId: string): Promise<{ success: boolean
 
 export async function createPersonAsChildOf(
   parentPersonId: string,
-  newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
+  newPersonData: { fullName: string; gender: "MALE" | "FEMALE"; isLiving?: boolean }
 ): Promise<PersonActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
-  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+  const trimmedName = newPersonData.fullName?.trim() ?? "";
+  if (trimmedName.length < 2) return { success: false, error: "الاسم يجب أن يكون حرفين على الأقل" };
 
   const parent = await db.person.findUnique({ where: { id: parentPersonId } });
   if (!parent || parent.deletedAt) return { success: false, error: "الشخص غير موجود" };
@@ -484,34 +582,44 @@ export async function createPersonAsChildOf(
     return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
-  const child = await db.person.create({
-    data: {
-      familyId: parent.familyId,
-      fullName: newPersonData.fullName.trim(),
-      gender: newPersonData.gender,
-      isLiving: true,
-      visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
-    },
-  });
+  const childIsLiving = newPersonData.isLiving ?? true;
 
-  await db.parentChildRelation.create({
-    data: { parentPersonId, childPersonId: child.id },
-  });
+  let childId: string;
+  try {
+    childId = await db.$transaction(async (tx) => {
+      const child = await tx.person.create({
+        data: {
+          familyId: parent.familyId,
+          fullName: trimmedName,
+          gender: newPersonData.gender,
+          isLiving: childIsLiving,
+          visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
+        },
+      });
+      await tx.parentChildRelation.create({
+        data: { parentPersonId, childPersonId: child.id },
+      });
+      return child.id;
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "خطأ في إنشاء الفرد" };
+  }
 
   await recomputeFamilyAncestry(parent.familyId);
 
   revalidatePath(`/dashboard/families/${parent.familyId}`);
   revalidatePath(`/family/${parent.familyId}`);
-  return { success: true, personId: child.id };
+  return { success: true, personId: childId };
 }
 
 export async function createPersonAsParentOf(
   childPersonId: string,
-  newPersonData: { fullName: string; gender: "MALE" | "FEMALE" }
+  newPersonData: { fullName: string; gender: "MALE" | "FEMALE"; isLiving?: boolean }
 ): Promise<PersonActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
-  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+  const trimmedName = newPersonData.fullName?.trim() ?? "";
+  if (trimmedName.length < 2) return { success: false, error: "الاسم يجب أن يكون حرفين على الأقل" };
 
   const child = await db.person.findUnique({ where: { id: childPersonId } });
   if (!child || child.deletedAt) return { success: false, error: "الشخص غير موجود" };
@@ -524,34 +632,45 @@ export async function createPersonAsParentOf(
   const parentSlotError = await validateNewParentSlot(childPersonId, newPersonData.gender);
   if (parentSlotError) return { success: false, error: parentSlotError };
 
-  const parent = await db.person.create({
-    data: {
-      familyId: child.familyId,
-      fullName: newPersonData.fullName.trim(),
-      gender: newPersonData.gender,
-      isLiving: false,
-      visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
-    },
-  });
+  // Parents added in quick-add are typically historical figures — default to deceased
+  const parentIsLiving = newPersonData.isLiving ?? false;
 
-  await db.parentChildRelation.create({
-    data: { parentPersonId: parent.id, childPersonId },
-  });
+  let parentId: string;
+  try {
+    parentId = await db.$transaction(async (tx) => {
+      const parent = await tx.person.create({
+        data: {
+          familyId: child.familyId,
+          fullName: trimmedName,
+          gender: newPersonData.gender,
+          isLiving: parentIsLiving,
+          visibilityLevel: defaultVisibilityForGender(newPersonData.gender),
+        },
+      });
+      await tx.parentChildRelation.create({
+        data: { parentPersonId: parent.id, childPersonId },
+      });
+      return parent.id;
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "خطأ في إنشاء الفرد" };
+  }
 
   await recomputeFamilyAncestry(child.familyId);
 
   revalidatePath(`/dashboard/families/${child.familyId}`);
   revalidatePath(`/family/${child.familyId}`);
-  return { success: true, personId: parent.id };
+  return { success: true, personId: parentId };
 }
 
 export async function createPersonAsSpouseOf(
   personId: string,
-  newPersonData: { fullName: string }
+  newPersonData: { fullName: string; isLiving?: boolean }
 ): Promise<PersonActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
-  if (!newPersonData.fullName?.trim()) return { success: false, error: "الاسم مطلوب" };
+  const trimmedName = newPersonData.fullName?.trim() ?? "";
+  if (trimmedName.length < 2) return { success: false, error: "الاسم يجب أن يكون حرفين على الأقل" };
 
   const person = await db.person.findUnique({ where: { id: personId } });
   if (!person || person.deletedAt) return { success: false, error: "الشخص غير موجود" };
@@ -561,30 +680,65 @@ export async function createPersonAsSpouseOf(
     return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
-  // الزوج/ة بالجنس المعاكس تلقائياً
+  // Validate active marriage limits before creating the new person
+  if (person.gender === "MALE") {
+    const activeWifeCount = await db.marriageRelation.count({
+      where: {
+        deletedAt: null,
+        status: "ACTIVE",
+        OR: [{ personAId: personId }, { personBId: personId }],
+      },
+    });
+    if (activeWifeCount >= 4) {
+      return { success: false, error: "وصل الرجل الحد الأقصى من الزوجات النشطات (4)" };
+    }
+  } else {
+    const activeHusband = await db.marriageRelation.findFirst({
+      where: {
+        deletedAt: null,
+        status: "ACTIVE",
+        OR: [{ personAId: personId }, { personBId: personId }],
+      },
+    });
+    if (activeHusband) {
+      return { success: false, error: "المرأة لها زوج نشط بالفعل" };
+    }
+  }
+
   const spouseGender = person.gender === "MALE" ? "FEMALE" : "MALE";
+  const spouseIsLiving = newPersonData.isLiving ?? true;
 
-  const spouse = await db.person.create({
-    data: {
-      familyId: person.familyId,
-      fullName: newPersonData.fullName.trim(),
-      gender: spouseGender,
-      isLiving: person.isLiving,
-      visibilityLevel: defaultVisibilityForGender(spouseGender),
-    },
-  });
+  let spouseId: string;
+  try {
+    spouseId = await db.$transaction(async (tx) => {
+      const spouse = await tx.person.create({
+        data: {
+          familyId: person.familyId,
+          fullName: trimmedName,
+          gender: spouseGender,
+          isLiving: spouseIsLiving,
+          visibilityLevel: defaultVisibilityForGender(spouseGender),
+        },
+      });
 
-  await db.personAncestry.create({
-    data: { ancestorId: spouse.id, descendantId: spouse.id, depth: 0 },
-  });
+      await tx.personAncestry.create({
+        data: { ancestorId: spouse.id, descendantId: spouse.id, depth: 0 },
+      });
 
-  await db.marriageRelation.create({
-    data: { personAId: person.id, personBId: spouse.id },
-  });
+      const [normalizedA, normalizedB] = [person.id, spouse.id].sort();
+      await tx.marriageRelation.create({
+        data: { personAId: normalizedA, personBId: normalizedB },
+      });
+
+      return spouse.id;
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "خطأ في إنشاء الزواج" };
+  }
 
   revalidatePath(`/dashboard/families/${person.familyId}`);
   revalidatePath(`/family/${person.familyId}`);
-  return { success: true, personId: spouse.id };
+  return { success: true, personId: spouseId };
 }
 
 export async function removeParentChildRelation(

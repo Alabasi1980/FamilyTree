@@ -114,7 +114,7 @@ export default function HomePage() {
         </div>
 
         {/* قسم المواطن */}
-        <section className="container mx-auto max-w-6xl px-4 py-8">
+        <section id="homeland-garden" className="container mx-auto max-w-6xl px-4 py-8">
           {/* عنوان القسم */}
           <div className="mb-8 flex items-end justify-between gap-4">
             <div className="space-y-1">

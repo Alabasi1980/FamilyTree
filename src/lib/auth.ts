@@ -60,25 +60,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        const credentialAccountType = (user as { accountType?: AccountType }).accountType;
-        if (credentialAccountType) {
-          token.accountType = credentialAccountType;
-        } else {
-          // OAuth sign-in: fetch accountType from DB
-          const dbUser = await db.user.findUnique({
-            where: { id: user.id },
-            select: { accountType: true, email: true },
-          });
-          // Permanent system admins by email
-          const SYSTEM_ADMIN_EMAILS = ["mjd.alabasi@gmail.com"];
-          const isPermAdmin = SYSTEM_ADMIN_EMAILS.includes(dbUser?.email ?? "");
-          if (isPermAdmin && dbUser?.accountType !== "SYSTEM_ADMIN") {
+
+        // دائماً نجلب من DB للتحقق من صلاحيات المدير الدائم
+        const dbUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { accountType: true, email: true },
+        });
+
+        const SYSTEM_ADMIN_EMAILS = ["mjd.alabasi@gmail.com"];
+        // نفحص البريد من DB أو من كائن المستخدم (Google يُرسله مباشرة)
+        const email = dbUser?.email ?? user.email ?? "";
+        const isPermAdmin = SYSTEM_ADMIN_EMAILS.includes(email);
+
+        if (isPermAdmin) {
+          // ترقية فورية إذا لم يكن مدير نظام بعد
+          if (dbUser?.accountType !== "SYSTEM_ADMIN") {
             await db.user.update({
               where: { id: user.id },
               data: { accountType: "SYSTEM_ADMIN" },
             });
           }
-          token.accountType = isPermAdmin ? "SYSTEM_ADMIN" : (dbUser?.accountType ?? "VISITOR");
+          token.accountType = "SYSTEM_ADMIN";
+        } else {
+          // مستخدم عادي: نعتمد على DB إذا توفّر، وإلا على الـ credentials
+          const credentialAccountType = (user as { accountType?: AccountType }).accountType;
+          token.accountType = dbUser?.accountType ?? credentialAccountType ?? "MEMBER";
         }
       }
       return token;

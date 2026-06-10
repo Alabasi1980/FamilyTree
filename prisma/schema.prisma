@@ -36,6 +36,43 @@ enum MarriageStatus {
   UNDOCUMENTED
 }
 
+enum ParentChildRelationType {
+  BIOLOGICAL
+  STEP
+  GUARDIANSHIP
+  ADOPTIVE
+  UNKNOWN
+}
+
+enum MarriageEndReason {
+  DIVORCE
+  DEATH_OF_SPOUSE
+  ANNULMENT
+  UNKNOWN
+}
+
+enum RelationConfidence {
+  VERIFIED
+  LIKELY
+  UNVERIFIED
+  DISPUTED
+}
+
+enum CrossFamilyMarriageStatus {
+  PENDING_FAMILY_A
+  PENDING_FAMILY_B
+  APPROVED
+  REJECTED
+  CANCELLED
+  APPLIED
+}
+
+enum FosterRelationConfidence {
+  DOCUMENTED
+  LIKELY
+  UNDOCUMENTED
+}
+
 enum FamilyLinkType {
   KINSHIP
   IN_LAW
@@ -126,6 +163,13 @@ enum BranchUnificationStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum PersonMembershipRole {
+  MARRIED_IN    // زوج/زوجة من عائلة أخرى يظهر في شجرة هذه العائلة
+  BRANCH_MEMBER // فرع موحَّد — نتيجة BranchUnification
+  CROSS_PARENT  // والد أو جد من عائلة أخرى مرتبط يدوياً
+  DESCENDANT    // ابن أو حفيد من عائلة أخرى مرتبط عبر والد خارجي
 }
 
 enum BranchUnificationRelationship {
@@ -259,8 +303,9 @@ model Family {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  persons          Person[]
-  adminAssignments FamilyAdminAssignment[]
+  persons           Person[]
+  personMemberships PersonFamilyMembership[]
+  adminAssignments  FamilyAdminAssignment[]
   familyLinksA     FamilyLink[]            @relation("FamilyLinkA")
   familyLinksB     FamilyLink[]            @relation("FamilyLinkB")
   workspaceFamilies WorkspaceFamily[]
@@ -397,6 +442,9 @@ model Person {
   linkedUsers     User[]         @relation("UserLinkedPerson")
   adminRequestsAsTarget AdminRequest[] @relation("AdminRequestTargetPerson")
 
+  // Secondary family memberships (person appears in multiple family trees)
+  familyMemberships PersonFamilyMembership[]
+
   // Closure table relations
   ancestorIn   PersonAncestry[] @relation("AncestorPerson")
   descendantIn PersonAncestry[] @relation("DescendantPerson")
@@ -406,10 +454,12 @@ model Person {
 }
 
 model ParentChildRelation {
-  id             String   @id @default(cuid())
+  id             String                  @id @default(cuid())
   parentPersonId String
   childPersonId  String
-  createdAt      DateTime @default(now())
+  relationType   ParentChildRelationType @default(BIOLOGICAL)
+  confidence     RelationConfidence      @default(VERIFIED)
+  createdAt      DateTime                @default(now())
 
   parent Person @relation("ParentPerson", fields: [parentPersonId], references: [id], onDelete: Cascade)
   child  Person @relation("ChildPerson", fields: [childPersonId], references: [id], onDelete: Cascade)
@@ -417,26 +467,41 @@ model ParentChildRelation {
   @@unique([parentPersonId, childPersonId])
   @@index([parentPersonId])
   @@index([childPersonId])
+  @@index([relationType])
+  @@index([confidence])
 }
 
 model MarriageRelation {
-  id           String         @id @default(cuid())
-  personAId    String
-  personBId    String
-  marriageDate DateTime?
-  divorceDate  DateTime?
-  status       MarriageStatus @default(ACTIVE)
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  deletedAt    DateTime?
+  id                   String              @id @default(cuid())
+  personAId            String
+  personBId            String
+  marriageDate         DateTime?
+  divorceDate          DateTime?
+  status               MarriageStatus      @default(ACTIVE)
+  endReason            MarriageEndReason?
+  confidence           RelationConfidence  @default(VERIFIED)
+  notes                String?
+  crossFamilyRequestId String?
+  revokedAt            DateTime?
+  revokedByUserId      String?
+  revocationReason     String?
+  supersededById       String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
 
-  personA Person @relation("MarriagePersonA", fields: [personAId], references: [id], onDelete: Cascade)
-  personB Person @relation("MarriagePersonB", fields: [personBId], references: [id], onDelete: Cascade)
+  personA       Person          @relation("MarriagePersonA", fields: [personAId], references: [id], onDelete: Cascade)
+  personB       Person          @relation("MarriagePersonB", fields: [personBId], references: [id], onDelete: Cascade)
+  supersededBy  MarriageRelation? @relation("MarriageSuperseded", fields: [supersededById], references: [id])
+  supersessions MarriageRelation[] @relation("MarriageSuperseded")
 
-  @@unique([personAId, personBId])
+  // Partial unique index for active marriages is managed via raw SQL migration
+  // (LEAST/GREATEST on personAId,personBId WHERE status='ACTIVE' AND deletedAt IS NULL)
   @@index([personAId])
   @@index([personBId])
+  @@index([status])
+  @@index([confidence])
+  @@index([crossFamilyRequestId])
 }
 
 // Closure Table for efficient ancestor/descendant queries
@@ -452,6 +517,26 @@ model PersonAncestry {
   @@unique([ancestorId, descendantId])
   @@index([ancestorId])
   @@index([descendantId])
+}
+
+// Secondary membership: person appears in another family's tree without changing primary familyId
+// Created automatically by:
+//   • applyCrossMarriageRequest  → MARRIED_IN for both spouses in each other's family
+//   • applyBranchUnification     → BRANCH_MEMBER for moved persons in source family
+//   • addParentChildRelation (cross-family) → CROSS_PARENT + DESCENDANT memberships
+model PersonFamilyMembership {
+  id        String               @id @default(cuid())
+  personId  String
+  familyId  String
+  role      PersonMembershipRole
+  addedAt   DateTime             @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, familyId])
+  @@index([familyId])
+  @@index([personId])
 }
 
 // ===========================
@@ -570,6 +655,57 @@ model BranchUnificationRequest {
   @@index([sourceFamilyId, status])
   @@index([targetFamilyId, status])
   @@index([submittedByUserId])
+}
+
+// Tracks nursing (رضاعة) relationships for mahram calculations
+// A FosterRelation means `childPersonId` was nursed by `nursingMotherPersonId`
+// The `nursingFatherId` is the husband of the nursing mother at the time of nursing
+// (he becomes the foster father — أب من الرضاعة)
+model FosterRelation {
+  id                  String                    @id @default(cuid())
+  childPersonId       String
+  nursingMotherPersonId String
+  nursingFatherId     String?
+  confidence          FosterRelationConfidence  @default(DOCUMENTED)
+  notes               String?
+  createdByUserId     String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  deletedAt           DateTime?
+
+  @@index([childPersonId])
+  @@index([nursingMotherPersonId])
+  @@index([nursingFatherId])
+  @@unique([childPersonId, nursingMotherPersonId])
+}
+
+model CrossFamilyMarriageRequest {
+  id                      String                    @id @default(cuid())
+  familyAId               String
+  familyBId               String
+  personAId               String
+  personBId               String
+  status                  CrossFamilyMarriageStatus @default(PENDING_FAMILY_B)
+  marriageDate            DateTime?
+  notes                   String?
+  submittedByUserId       String
+  familyAApprovedAt       DateTime?
+  familyAApprovedByUserId String?
+  familyBApprovedAt       DateTime?
+  familyBApprovedByUserId String?
+  rejectedAt              DateTime?
+  rejectedByUserId        String?
+  rejectionReason         String?
+  appliedAt               DateTime?
+  appliedMarriageId       String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  @@index([familyAId, status])
+  @@index([familyBId, status])
+  @@index([submittedByUserId])
+  @@index([personAId])
+  @@index([personBId])
 }
 
 model Notification {

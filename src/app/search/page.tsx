@@ -43,12 +43,16 @@ function normalizeQuery(value: string | string[] | undefined) {
   return (raw ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
 }
 
-function formatYears(birthDate: Date | null, deathDate: Date | null, isLiving: boolean) {
-  const birthYear = birthDate?.getFullYear();
-  const deathYear = deathDate?.getFullYear();
+function formatYears(
+  birthDate: Date | null, deathDate: Date | null, isLiving: boolean,
+  birthYearField?: number | null, deathYearField?: number | null,
+) {
+  const birthYear = birthDate?.getFullYear() ?? birthYearField ?? null;
+  const deathYear = deathDate?.getFullYear() ?? deathYearField ?? null;
 
   if (birthYear && deathYear) return `${birthYear} - ${deathYear}`;
   if (birthYear && isLiving) return `${labels.born} ${birthYear}`;
+  if (birthYear) return `${birthYear} - ؟`;
   if (deathYear) return `${labels.died} ${deathYear}`;
   return labels.noDates;
 }
@@ -98,7 +102,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             fullName: true,
             gender: true,
             isLiving: true,
+            birthYear: true,
             birthDate: true,
+            deathYear: true,
             deathDate: true,
             biography: true,
             family: {
@@ -178,11 +184,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                   <SectionTitle icon={<Users className="h-4 w-4" />} title={labels.persons} />
                   <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {persons.map((person) => (
-                      <Link key={person.id} href={`/family/${person.family.slug}`}>
+                      <Link key={person.id} href={`/family/${encodeURIComponent(person.family.slug)}?person=${person.id}`}>
                         <Card className="h-full rounded-lg border-border/60 bg-card/80 transition-colors hover:border-accent/50">
                           <CardContent className="flex items-start gap-3 p-4">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30">
-                              <User className="h-4 w-4 text-muted-foreground" />
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted/30 text-sm font-bold
+                              ${person.gender === "MALE" ? "border-blue-500/30 text-blue-400 bg-blue-500/10" : "border-rose-400/30 text-rose-400 bg-rose-400/10"}`}>
+                              {person.fullName[0]}
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -194,7 +201,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                                 </Badge>
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {labels.family} {person.family.name} - {formatYears(person.birthDate, person.deathDate, person.isLiving)}
+                                {person.family.name}
+                                {" · "}
+                                {formatYears(person.birthDate, person.deathDate, person.isLiving, person.birthYear, person.deathYear)}
                               </p>
                               {person.biography && (
                                 <p className="mt-2 line-clamp-2 text-xs leading-6 text-muted-foreground">

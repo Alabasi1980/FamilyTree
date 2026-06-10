@@ -252,6 +252,36 @@ export default async function FamilyDetailPage({ params }: Props) {
     divorceDate: m.divorceDate,
   }));
 
+  // Cross-family members (appear in this family via marriage, branch unification, or cross-parent link)
+  const rawCrossMembers = await db.personFamilyMembership.findMany({
+    where: { familyId: id },
+    select: {
+      id: true,
+      role: true,
+      addedAt: true,
+      person: {
+        select: {
+          id: true,
+          fullName: true,
+          gender: true,
+          family: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { addedAt: "desc" },
+  });
+  const crossFamilyMembers = rawCrossMembers.map((m) => ({
+    id: m.id,
+    role: m.role,
+    addedAt: m.addedAt,
+    person: {
+      id: m.person.id,
+      fullName: m.person.fullName,
+      gender: m.person.gender,
+      primaryFamilyName: m.person.family?.name ?? "غير معروفة",
+    },
+  }));
+
   // Pending JOIN_FAMILY_ADMINS requests for this family
   const pendingJoinRequests = await db.adminRequest.findMany({
     where: { targetFamilyId: id, requestType: "JOIN_FAMILY_ADMINS", status: "PENDING" },
@@ -368,6 +398,7 @@ export default async function FamilyDetailPage({ params }: Props) {
           contactEmail: r.applicantContactEmail ?? r.submittedBy.email,
           contactPhone: r.applicantContactPhone ?? r.submittedBy.phone,
         }))}
+        crossFamilyMembers={crossFamilyMembers}
         userId={user.id}
       />
     </div>

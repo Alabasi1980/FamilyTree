@@ -414,7 +414,7 @@ export function PersonSidebar({
 
   return (
     <div
-      className="fixed inset-x-3 bottom-3 z-50 max-h-[72vh] rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/40 flex flex-col overflow-hidden md:relative md:inset-auto md:z-auto md:h-full md:max-h-none md:w-72 md:rounded-none md:border-y-0 md:border-l-0 md:border-r md:shadow-none"
+      className="fixed inset-x-3 bottom-3 z-50 max-h-[72vh] rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/40 flex flex-col overflow-hidden md:relative md:inset-auto md:z-auto md:h-full md:max-h-none md:w-72 xl:w-80 md:rounded-none md:border-y-0 md:border-l-0 md:border-r md:shadow-none"
       dir="rtl"
     >
       {/* ── Header ── */}
@@ -771,7 +771,7 @@ export function PersonSidebar({
         {/* ── View full profile ── */}
         <div className="border-t border-border/30 pt-3">
           <Link
-            href={`/dashboard/families/${familyId}/persons/${person.id}`}
+            href={`/dashboard/families/${person.sourceFamilyId ?? familyId}/persons/${person.id}`}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <Link2 className="h-3.5 w-3.5" />

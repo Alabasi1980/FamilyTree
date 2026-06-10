@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { ArrowRight, MapPin, Users, TreePine, Globe } from "lucide-react";
+import { ArrowRight, MapPin, Users, TreePine, Globe, Lock } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { FamilyCard } from "@/components/families/family-card";
+import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { parseFamilyHomelandKey, unspecifiedHomelandKey } from "@/lib/family-homeland";
 import { withBasePath } from "@/lib/base-path";
@@ -110,8 +111,18 @@ export default async function HomelandPage({ params }: Props) {
 
               {/* اليمين: إحصائيات */}
               <div className="flex flex-wrap gap-3">
-                <StatCard icon={<TreePine className="h-4 w-4" />} value={families.length} label={families.length === 1 ? "عائلة" : "عائلات"} />
-                <StatCard icon={<Users className="h-4 w-4" />} value={totalMembers} label="فرد مسجّل" />
+                <StatCard
+                  icon={<TreePine className="h-5 w-5" />}
+                  value={families.length}
+                  label={families.length === 1 ? "عائلة" : "عائلات"}
+                  bg="bg-primary/15"
+                />
+                <StatCard
+                  icon={<Users className="h-5 w-5" />}
+                  value={totalMembers}
+                  label="فرد مسجّل"
+                  bg="bg-accent/10"
+                />
               </div>
             </div>
           </div>
@@ -129,7 +140,49 @@ export default async function HomelandPage({ params }: Props) {
               <p className="text-muted-foreground">لا توجد عائلات عامة في هذا الموطن</p>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-6">
+
+              {/* ── نظرة سريعة — قبل الشبكة التفصيلية ── */}
+              <div className="rounded-xl border border-border/40 bg-card/40 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/30 bg-muted/10">
+                  <p className="text-xs font-medium text-muted-foreground">نظرة سريعة</p>
+                  <span className="text-xs text-muted-foreground/60">
+                    {families.length} {families.length === 1 ? "عائلة" : "عائلات"} · {totalMembers} فرد
+                  </span>
+                </div>
+                <ul className="divide-y divide-border/25">
+                  {families.map((f) => (
+                    <li key={f.id}>
+                      <Link
+                        href={`/family/${f.slug}`}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors group"
+                      >
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            f.isPublic ? "bg-green-500" : "bg-muted-foreground/30"
+                          }`}
+                        />
+                        <span className="flex-1 text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate">
+                          عائلة {f.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                          {f._count.persons} فرد
+                        </span>
+                        <Badge
+                          variant={f.isPublic ? "public" : "private"}
+                          className="shrink-0 text-[10px] py-0"
+                        >
+                          {f.isPublic ? (
+                            <><Globe className="h-2.5 w-2.5 ml-0.5" />عامة</>
+                          ) : (
+                            <><Lock className="h-2.5 w-2.5 ml-0.5" />خاصة</>
+                          )}
+                        </Badge>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               {/* أكبر عائلة — بطاقة مميزة */}
               {largestFamily && families.length > 1 && (
                 <div className="mb-2">
@@ -181,13 +234,19 @@ export default async function HomelandPage({ params }: Props) {
   );
 }
 
-function StatCard({ icon, value, label }: { icon: ReactNode; value: number; label: string }) {
+function StatCard({
+  icon, value, label, bg = "bg-primary/15",
+}: {
+  icon: ReactNode; value: number; label: string; bg?: string;
+}) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 px-4 py-3 backdrop-blur-sm">
-      <span className="text-accent">{icon}</span>
+    <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 px-5 py-4 backdrop-blur-sm">
+      <div className={`rounded-lg p-2 ${bg}`}>
+        <span className="text-accent">{icon}</span>
+      </div>
       <div>
-        <p className="text-xl font-bold text-foreground tabular-nums">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-3xl font-bold text-foreground tabular-nums">{value}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
       </div>
     </div>
   );

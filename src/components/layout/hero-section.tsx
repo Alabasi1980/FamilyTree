@@ -1,13 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import { PublicSearchForm } from "@/components/search/public-search-form";
+import { ChevronDown } from "lucide-react";
 
 interface Props {
   heroIconUrl: string;
   brand: string;
   tagline: string;
+  gardenSectionId?: string;
 }
 
 // شجرة SVG ديكورية — فروع عضوية
@@ -84,7 +87,7 @@ const itemVariants: Variants = {
   },
 };
 
-export function HeroSection({ heroIconUrl, brand, tagline }: Props) {
+export function HeroSection({ heroIconUrl, brand, tagline, gardenSectionId = "homeland-garden" }: Props) {
   // تمييز "الأصول" بلون الـ accent
   const brandParts = brand.split("الأصول");
   const hasSplit = brandParts.length > 1;
@@ -162,6 +165,26 @@ export function HeroSection({ heroIconUrl, brand, tagline }: Props) {
           {/* البحث */}
           <motion.div variants={itemVariants} className="mt-8">
             <PublicSearchForm size="large" />
+          </motion.div>
+
+          {/* CTAs */}
+          <motion.div
+            variants={itemVariants}
+            className="mt-5 flex items-center gap-3 flex-wrap"
+          >
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent/15 border border-accent/30 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25 hover:border-accent/50 transition-all duration-200"
+            >
+              أضف عائلتك
+            </Link>
+            <a
+              href={`#${gardenSectionId}`}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown className="h-4 w-4" />
+              استكشف المواطن
+            </a>
           </motion.div>
 
         </div>

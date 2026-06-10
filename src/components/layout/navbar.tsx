@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { TreePine } from "lucide-react";
-import { PublicSearchForm } from "@/components/search/public-search-form";
+import { TreePine, Search } from "lucide-react";
 
 const labels = {
   brand: "بستان الأصول",
@@ -12,6 +11,7 @@ const labels = {
   logout: "خروج",
   login: "دخول",
   register: "انضم",
+  search: "بحث",
 };
 
 export async function Navbar() {
@@ -39,13 +39,15 @@ export async function Navbar() {
             </span>
           </Link>
 
-          {/* Search — وسط */}
-          <div className="hidden md:flex flex-1 max-w-sm mx-4">
-            <PublicSearchForm />
-          </div>
-
           {/* Nav actions */}
           <nav className="flex items-center gap-1.5 shrink-0">
+            {/* Search icon — رابط لصفحة البحث */}
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5" asChild>
+              <Link href="/search">
+                <Search className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">{labels.search}</span>
+              </Link>
+            </Button>
             {session?.user ? (
               <>
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>

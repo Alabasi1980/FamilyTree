@@ -10,7 +10,9 @@ import FamilyLinkManager from "@/components/families/family-link-manager";
 import BranchUnificationManager from "@/components/families/branch-unification-manager";
 import MarriageManager from "@/components/persons/marriage-manager";
 import { CoAdminManager } from "@/components/families/co-admin-manager";
-import type { Gender, HomelandConfidence, VisibilityLevel } from "@/generated/prisma/client";
+import { Network } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import type { Gender, HomelandConfidence, PersonMembershipRole, VisibilityLevel } from "@/generated/prisma/client";
 
 interface PersonItem {
   id: string;
@@ -100,6 +102,18 @@ interface BranchTargetFamily {
   persons: { id: string; fullName: string }[];
 }
 
+interface CrossFamilyMemberItem {
+  id: string;
+  role: PersonMembershipRole;
+  addedAt: Date;
+  person: {
+    id: string;
+    fullName: string;
+    gender: Gender;
+    primaryFamilyName: string;
+  };
+}
+
 interface Props {
   familyId: string;
   isFamilyAdmin: boolean;
@@ -115,8 +129,16 @@ interface Props {
   linkedPersons: LinkedPersonItem[];
   admins: AdminItem[];
   pendingJoinRequests: JoinRequestItem[];
+  crossFamilyMembers: CrossFamilyMemberItem[];
   userId: string;
 }
+
+const membershipRoleLabels: Record<PersonMembershipRole, { label: string; variant: "member" | "gold" | "public" | "secondary" }> = {
+  MARRIED_IN:   { label: "متزوج/ة في العائلة", variant: "member" },
+  BRANCH_MEMBER:{ label: "فرع موحَّد",         variant: "gold" },
+  CROSS_PARENT: { label: "والد/والدة خارجي",   variant: "public" },
+  DESCENDANT:   { label: "فرع منتسب",           variant: "secondary" },
+};
 
 export function FamilyDetailTabs({
   familyId,
@@ -133,6 +155,7 @@ export function FamilyDetailTabs({
   linkedPersons,
   admins,
   pendingJoinRequests,
+  crossFamilyMembers,
   userId,
 }: Props) {
   const personOptions = orderedPersons.map((p) => ({ id: p.id, fullName: p.fullName }));
@@ -216,6 +239,47 @@ export function FamilyDetailTabs({
               currentPersons={personOptions}
               targetFamilies={branchTargetFamilies}
             />
+          </CardContent>
+        </Card>
+
+        {/* Cross-family members */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Network className="h-4 w-4 text-muted-foreground" />
+              أعضاء من عائلات أخرى
+              {crossFamilyMembers.length > 0 && (
+                <span className="rounded-full bg-primary/20 px-1.5 py-0 text-xs font-medium text-foreground/70">
+                  {crossFamilyMembers.length}
+                </span>
+              )}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              أشخاص من عائلات أخرى يظهرون في شجرة هذه العائلة بسبب زواج أو توحيد فرعين أو رابط أبوي.
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            {crossFamilyMembers.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">
+                لا يوجد أعضاء من عائلات أخرى حتى الآن.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {crossFamilyMembers.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{m.person.fullName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        عائلته الأصلية: {m.person.primaryFamilyName}
+                      </p>
+                    </div>
+                    <Badge variant={membershipRoleLabels[m.role].variant} className="shrink-0">
+                      {membershipRoleLabels[m.role].label}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 

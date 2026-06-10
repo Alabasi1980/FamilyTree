@@ -65,3 +65,18 @@ export async function registerUser(data: {
 
   return { success: true };
 }
+
+export type LoginDiagnosis = "no_account" | "google_only" | "has_password";
+
+export async function checkLoginReason(emailOrPhone: string): Promise<LoginDiagnosis> {
+  const user = await db.user.findFirst({
+    where: {
+      OR: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+      deletedAt: null,
+    },
+    select: { passwordHash: true },
+  });
+  if (!user) return "no_account";
+  if (!user.passwordHash) return "google_only";
+  return "has_password";
+}

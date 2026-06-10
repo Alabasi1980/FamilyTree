@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { TreePine, Users, ClipboardList, Plus, MapPin, ArrowLeft, Sprout } from "lucide-react";
+import { TreePine, Users, ClipboardList, Plus, MapPin, ArrowLeft, Sprout, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatFamilyHomeland, getFamilyHomelandKey } from "@/lib/family-homeland";
@@ -104,6 +104,65 @@ export default async function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      {/* ── Onboarding — تظهر فقط للمستخدم الجديد الذي لا يدير عائلات بعد ── */}
+      {!isSystemAdmin && managedFamiliesCount === 0 && (
+        <div className="rounded-2xl border border-accent/20 bg-accent/5 overflow-hidden">
+          <div className="px-5 py-4 border-b border-accent/15">
+            <p className="text-xs text-accent/70 font-medium uppercase tracking-widest mb-0.5">ابدأ من هنا</p>
+            <h2 className="text-base font-semibold text-foreground">ماذا تريد أن تفعل؟</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-border/30">
+            <Link
+              href="/search"
+              className="group flex flex-col gap-2 p-5 hover:bg-accent/8 transition-colors"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 border border-primary/20 group-hover:bg-primary/30 transition-colors">
+                <Search className="h-4 w-4 text-accent" />
+              </div>
+              <p className="text-sm font-medium text-foreground">ابحث عن نفسك</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ابحث باسمك في الأشجار الموجودة واربط حسابك بورقتك.
+              </p>
+              <span className="mt-auto flex items-center gap-1 text-xs text-accent group-hover:gap-2 transition-all">
+                ابدأ البحث <ArrowLeft className="h-3 w-3" />
+              </span>
+            </Link>
+
+            <Link
+              href="/dashboard/families/new"
+              className="group flex flex-col gap-2 p-5 hover:bg-accent/8 transition-colors"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 border border-primary/20 group-hover:bg-primary/30 transition-colors">
+                <TreePine className="h-4 w-4 text-accent" />
+              </div>
+              <p className="text-sm font-medium text-foreground">أنشئ شجرة عائلتك</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ابدأ شجرة جديدة لعائلتك وادعُ أفراد العائلة للمشاركة.
+              </p>
+              <span className="mt-auto flex items-center gap-1 text-xs text-accent group-hover:gap-2 transition-all">
+                إنشاء عائلة <ArrowLeft className="h-3 w-3" />
+              </span>
+            </Link>
+
+            <Link
+              href="/dashboard/requests"
+              className="group flex flex-col gap-2 p-5 hover:bg-accent/8 transition-colors"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 border border-primary/20 group-hover:bg-primary/30 transition-colors">
+                <UserPlus className="h-4 w-4 text-accent" />
+              </div>
+              <p className="text-sm font-medium text-foreground">انضم كمسؤول عائلة</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                إذا كانت عائلتك موجودة، اطلب صلاحية إدارتها من مسؤولها.
+              </p>
+              <span className="mt-auto flex items-center gap-1 text-xs text-accent group-hover:gap-2 transition-all">
+                تقديم طلب <ArrowLeft className="h-3 w-3" />
+              </span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 import { useState } from "react";
 import {
   TreePine, LayoutDashboard, Users, ClipboardList,
-  Settings, LogOut, Shield, Menu, X, Globe, Bell, AlertTriangle, MapPinned,
+  Settings, LogOut, Shield, Menu, X, Globe, Bell, AlertTriangle, MapPinned, ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { withBasePath } from "@/lib/base-path";
@@ -30,10 +30,11 @@ const homelandNav = [
 ];
 
 const familyNav = [
-  { href: "/dashboard/families", label: "عائلاتي", icon: TreePine, exact: false },
-  { href: "/dashboard/requests", label: "الطلبات", icon: ClipboardList, exact: false },
-  { href: "/dashboard/notifications", label: "التنبيهات", icon: Bell, exact: false },
-  { href: "/dashboard/complaints", label: "الشكاوى", icon: AlertTriangle, exact: false },
+  { href: "/dashboard/families",     label: "عائلاتي",      icon: TreePine,    exact: false },
+  { href: "/dashboard/requests",     label: "الطلبات",      icon: ClipboardList, exact: false },
+  { href: "/dashboard/notifications",label: "التنبيهات",    icon: Bell,        exact: false },
+  { href: "/dashboard/complaints",   label: "الشكاوى",      icon: AlertTriangle, exact: false },
+  { href: "/dashboard/audit",        label: "تدقيق البيانات", icon: ShieldAlert, exact: false },
 ];
 
 const adminNav = [
@@ -163,7 +164,7 @@ export function DashboardSidebar({ user, unreadNotifications = 0 }: { user: Side
             <div className="min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{user.name ?? user.email}</p>
               <p className="text-[10px] text-muted-foreground truncate">
-                {user.accountType === "SYSTEM_ADMIN" ? "مدير النظام" : "مسؤول عائلة"}
+                {user.accountType === "SYSTEM_ADMIN" ? "مدير النظام" : "عضو"}
               </p>
             </div>
           </div>

@@ -142,57 +142,96 @@ async function applyBranchUnification(requestId: string) {
   if (!sourcePerson || !targetPerson) throw new Error(messages.personMismatch);
 
   await assertParentSlotsAvailable(sourcePerson.id, targetPerson.id, req.relationship);
+
+  // Require real parent names — no phantom parents allowed
+  const needsFather = req.relationship === "FULL_SIBLINGS" || req.relationship === "PATERNAL_SIBLINGS";
+  const needsMother = req.relationship === "FULL_SIBLINGS" || req.relationship === "MATERNAL_SIBLINGS";
+  if (needsFather && !emptyToNull(req.sharedFatherName)) {
+    throw new Error("يجب تحديد اسم الأب المشترك لإتمام توحيد الفروع");
+  }
+  if (needsMother && !emptyToNull(req.sharedMotherName)) {
+    throw new Error("يجب تحديد اسم الأم المشتركة لإتمام توحيد الفروع");
+  }
+
   const movingIds = await collectDescendantIds(targetPerson.id, req.targetFamilyId);
 
-  await db.person.updateMany({
-    where: { id: { in: movingIds } },
-    data: { familyId: req.sourceFamilyId },
+  // Single atomic transaction:
+  // • Add BRANCH_MEMBER memberships (no longer changes familyId)
+  // • Create shared parents in sourceFamilyId with BRANCH_MEMBER membership in targetFamilyId
+  // • Link shared parents to both root persons
+  // • Mark request as applied
+  await db.$transaction(async (tx) => {
+    // Add secondary memberships for all moving persons in sourceFamily
+    if (movingIds.length > 0) {
+      await tx.personFamilyMembership.createMany({
+        data: movingIds.map((personId) => ({
+          personId,
+          familyId: req.sourceFamilyId,
+          role: "BRANCH_MEMBER" as const,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (needsFather) {
+      const father = await tx.person.create({
+        data: {
+          familyId: req.sourceFamilyId,
+          fullName: emptyToNull(req.sharedFatherName)!,
+          gender: "MALE",
+          isLiving: false,
+          visibilityLevel: "PUBLIC",
+        },
+        select: { id: true },
+      });
+      // Shared father also visible in target family
+      await tx.personFamilyMembership.create({
+        data: { personId: father.id, familyId: req.targetFamilyId, role: "BRANCH_MEMBER" },
+      });
+      await tx.parentChildRelation.createMany({
+        data: [
+          { parentPersonId: father.id, childPersonId: sourcePerson.id },
+          { parentPersonId: father.id, childPersonId: targetPerson.id },
+        ],
+        skipDuplicates: true,
+      });
+    }
+
+    if (needsMother) {
+      const mother = await tx.person.create({
+        data: {
+          familyId: req.sourceFamilyId,
+          fullName: emptyToNull(req.sharedMotherName)!,
+          gender: "FEMALE",
+          isLiving: false,
+          visibilityLevel: "PUBLIC",
+        },
+        select: { id: true },
+      });
+      // Shared mother also visible in target family
+      await tx.personFamilyMembership.create({
+        data: { personId: mother.id, familyId: req.targetFamilyId, role: "BRANCH_MEMBER" },
+      });
+      await tx.parentChildRelation.createMany({
+        data: [
+          { parentPersonId: mother.id, childPersonId: sourcePerson.id },
+          { parentPersonId: mother.id, childPersonId: targetPerson.id },
+        ],
+        skipDuplicates: true,
+      });
+    }
+
+    await tx.branchUnificationRequest.update({
+      where: { id: requestId },
+      data: { status: "APPROVED", appliedAt: new Date(), reviewNotes: messages.approved },
+    });
   });
 
-  const parentCreates: Array<{ fullName: string; gender: "MALE" | "FEMALE" }> = [];
-  if (req.relationship === "FULL_SIBLINGS" || req.relationship === "PATERNAL_SIBLINGS") {
-    parentCreates.push({
-      fullName: emptyToNull(req.sharedFatherName) ?? messages.commonFather,
-      gender: "MALE",
-    });
-  }
-  if (req.relationship === "FULL_SIBLINGS" || req.relationship === "MATERNAL_SIBLINGS") {
-    parentCreates.push({
-      fullName: emptyToNull(req.sharedMotherName) ?? messages.commonMother,
-      gender: "FEMALE",
-    });
-  }
-
-  for (const parentData of parentCreates) {
-    const parent = await db.person.create({
-      data: {
-        familyId: req.sourceFamilyId,
-        fullName: parentData.fullName,
-        gender: parentData.gender,
-        isLiving: false,
-        visibilityLevel: "PUBLIC",
-      },
-      select: { id: true },
-    });
-
-    await db.parentChildRelation.createMany({
-      data: [
-        { parentPersonId: parent.id, childPersonId: sourcePerson.id },
-        { parentPersonId: parent.id, childPersonId: targetPerson.id },
-      ],
-      skipDuplicates: true,
-    });
-  }
-
+  // Recompute ancestry after the transaction (has its own internal transaction)
   await Promise.all([
     recomputeFamilyAncestry(req.sourceFamilyId),
     recomputeFamilyAncestry(req.targetFamilyId),
   ]);
-
-  await db.branchUnificationRequest.update({
-    where: { id: requestId },
-    data: { status: "APPROVED", appliedAt: new Date(), reviewNotes: messages.approved },
-  });
 
   const [sourceAdmins, targetAdmins] = await Promise.all([
     getActiveFamilyAdminUserIds(req.sourceFamilyId),
@@ -205,6 +244,120 @@ async function applyBranchUnification(requestId: string) {
     href: requestFocusHref(requestId),
     metadata: { requestId, sourceFamilyId: req.sourceFamilyId, targetFamilyId: req.targetFamilyId },
   });
+}
+
+// ─── Impact Analysis ─────────────────────────────────────────────────────────
+// Returns a preview of all changes that would occur if this unification request is applied.
+// Called before the admin confirms — lets them see dangling relations upfront.
+export async function analyzeBranchUnificationImpact(requestId: string) {
+  const session = await auth();
+  if (!session?.user) return { success: false as const, error: messages.unauthorized };
+
+  const req = await db.branchUnificationRequest.findUnique({ where: { id: requestId } });
+  if (!req) return { success: false as const, error: messages.notFound };
+
+  const isSystemAdmin = session.user.accountType === "SYSTEM_ADMIN";
+  const [canManageSource, canManageTarget] = await Promise.all([
+    canManageFamily(session.user.id, req.sourceFamilyId, isSystemAdmin),
+    canManageFamily(session.user.id, req.targetFamilyId, isSystemAdmin),
+  ]);
+  if (!canManageSource && !canManageTarget) {
+    return { success: false as const, error: messages.noPermission };
+  }
+
+  // Persons that will be moved: targetPerson + all its descendants in targetFamily
+  const movingIds = await collectDescendantIds(req.targetPersonId, req.targetFamilyId);
+  const movingPersons = await db.person.findMany({
+    where: { id: { in: movingIds }, deletedAt: null },
+    select: { id: true, fullName: true, gender: true, familyId: true },
+  });
+  const movingSet = new Set(movingIds);
+
+  // Marriages that will become cross-family:
+  // one side in movingSet, the other side in targetFamily but NOT in movingSet
+  const marriageRows = await db.marriageRelation.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { personAId: { in: movingIds } },
+        { personBId: { in: movingIds } },
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      personA: { select: { id: true, fullName: true, familyId: true } },
+      personB: { select: { id: true, fullName: true, familyId: true } },
+    },
+  });
+
+  const crossFamilyMarriages = marriageRows.filter((m) => {
+    const aMoving = movingSet.has(m.personA.id);
+    const bMoving = movingSet.has(m.personB.id);
+    return aMoving !== bMoving; // one side moves, the other stays
+  }).map((m) => ({
+    marriageId: m.id,
+    status: m.status,
+    personA: { id: m.personA.id, fullName: m.personA.fullName, familyId: m.personA.familyId },
+    personB: { id: m.personB.id, fullName: m.personB.fullName, familyId: m.personB.familyId },
+    note: "سيصبح هذا الزواج رابطاً بين شخصين في عائلتين مختلفتين بعد النقل",
+  }));
+
+  // Parent-child relations that will become cross-family:
+  // parent in targetFamily (not moving), child in movingSet — or vice versa
+  const parentLinks = await db.parentChildRelation.findMany({
+    where: {
+      OR: [
+        { childPersonId: { in: movingIds } },
+        { parentPersonId: { in: movingIds } },
+      ],
+      parent: { deletedAt: null },
+      child: { deletedAt: null },
+    },
+    select: {
+      parent: { select: { id: true, fullName: true, familyId: true } },
+      child: { select: { id: true, fullName: true, familyId: true } },
+      relationType: true,
+    },
+  });
+
+  const crossFamilyParentLinks = parentLinks.filter((link) => {
+    const parentMoving = movingSet.has(link.parent.id);
+    const childMoving = movingSet.has(link.child.id);
+    return parentMoving !== childMoving;
+  }).map((link) => ({
+    parent: { id: link.parent.id, fullName: link.parent.fullName, familyId: link.parent.familyId },
+    child: { id: link.child.id, fullName: link.child.fullName, familyId: link.child.familyId },
+    relationType: link.relationType,
+    note: "ستصبح هذه العلاقة الأبوية بين عائلتين مختلفتين بعد النقل",
+  }));
+
+  // New shared parents that will be created
+  const sharedParentsToCreate: { name: string; gender: "MALE" | "FEMALE" }[] = [];
+  if (req.relationship === "FULL_SIBLINGS" || req.relationship === "PATERNAL_SIBLINGS") {
+    if (emptyToNull(req.sharedFatherName)) {
+      sharedParentsToCreate.push({ name: req.sharedFatherName!, gender: "MALE" });
+    }
+  }
+  if (req.relationship === "FULL_SIBLINGS" || req.relationship === "MATERNAL_SIBLINGS") {
+    if (emptyToNull(req.sharedMotherName)) {
+      sharedParentsToCreate.push({ name: req.sharedMotherName!, gender: "FEMALE" });
+    }
+  }
+
+  return {
+    success: true as const,
+    movingPersons,
+    crossFamilyMarriages,
+    crossFamilyParentLinks,
+    sharedParentsToCreate,
+    summary: {
+      movingCount: movingPersons.length,
+      crossMarriagesCount: crossFamilyMarriages.length,
+      crossParentLinksCount: crossFamilyParentLinks.length,
+      hasWarnings: crossFamilyMarriages.length > 0 || crossFamilyParentLinks.length > 0,
+    },
+  };
 }
 
 export async function submitBranchUnificationRequest(rawData: unknown) {

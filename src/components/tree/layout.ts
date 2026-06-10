@@ -3,7 +3,7 @@
 // network canvas (family-network.tsx). Kept free of React / component imports.
 
 export const NODE_W = 180;
-export const NODE_H = 88;
+export const NODE_H = 96;
 export const GAP_X  = 56;
 export const GAP_Y  = 160;
 

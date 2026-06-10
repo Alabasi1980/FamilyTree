@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, CheckCircle2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import DuplicateWarning from "@/components/persons/duplicate-warning";
@@ -26,6 +26,7 @@ export default function AddPersonPage() {
   const [visibilityLevel, setVisibilityLevel] = useState<VisibilityValue>("PUBLIC");
   const [fullName, setFullName] = useState("");
   const [birthYear, setBirthYear] = useState<number | undefined>();
+  const [successResult, setSuccessResult] = useState<{ personId: string; name: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,8 +58,62 @@ export default function AddPersonPage() {
         return;
       }
 
-      router.push(withBasePath(`/dashboard/families/${familyId}`));
+      setSuccessResult({ personId: result.personId ?? "", name: fullName.trim() });
     });
+  }
+
+  if (successResult) {
+    return (
+      <div className="max-w-2xl space-y-6">
+        <div className="flex items-center gap-3">
+          <Link href={`/dashboard/families/${familyId}`} className="text-muted-foreground hover:text-foreground">
+            <ArrowRight className="h-5 w-5" />
+          </Link>
+          <h1 className="text-xl font-bold text-foreground">إضافة فرد جديد</h1>
+        </div>
+
+        <div className="rounded-2xl border border-green-800/40 bg-green-900/10 p-8 text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-900/30 border border-green-700/40">
+              <CheckCircle2 className="h-7 w-7 text-green-400" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-foreground">تمت الإضافة بنجاح</p>
+          <p className="text-sm text-muted-foreground">
+            تمت إضافة <span className="font-medium text-foreground">{successResult.name}</span> إلى العائلة.
+          </p>
+          <div className="flex justify-center gap-3 pt-2 flex-wrap">
+            {successResult.personId && (
+              <Button
+                variant="gold"
+                onClick={() => router.push(withBasePath(`/dashboard/families/${familyId}/persons/${successResult.personId}`))}
+              >
+                عرض الفرد
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSuccessResult(null);
+                setFullName("");
+                setGender("MALE");
+                setVisibilityLevel("PUBLIC");
+                setError("");
+              }}
+            >
+              <UserPlus className="h-4 w-4 ml-2" />
+              إضافة فرد آخر
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => router.push(withBasePath(`/dashboard/families/${familyId}`))}
+            >
+              العودة إلى العائلة
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

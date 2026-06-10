@@ -13,10 +13,12 @@ import { formatFamilyHomeland } from "@/lib/family-homeland";
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ person?: string }>;
 }
 
-export default async function FamilyPublicPage({ params }: Props) {
+export default async function FamilyPublicPage({ params, searchParams }: Props) {
   const { slug: rawSlug } = await params;
+  const { person: defaultPersonId } = await searchParams;
   const slug = decodeURIComponent(rawSlug);
   const session = await auth();
   const userId = session?.user?.id ?? null;
@@ -412,6 +414,7 @@ export default async function FamilyPublicPage({ params }: Props) {
               linkedPersons={linkedPersonsForTree}
               linkedFamilies={linkedFamiliesForPanel}
               hasLinkedFamilies={familyLinks.length > 0}
+              defaultSelectedPersonId={defaultPersonId}
             />
           )}
         </div>

@@ -54,6 +54,7 @@ interface Props {
   linkedPersons?: PersonData[];
   linkedFamilies?: LinkedFamilyInfo[];
   hasLinkedFamilies?: boolean;
+  defaultSelectedPersonId?: string;
 }
 
 const nodeTypes = { person: PersonNode };
@@ -105,7 +106,7 @@ export function FamilyTree({
   persons, relations, marriages = [], canManage = false, isSystemAdmin = false,
   isLoggedIn = false, userLinkedPersonId = null,
   familyId = "", familySlug = "", linkedPersons = [], linkedFamilies = [],
-  hasLinkedFamilies = false,
+  hasLinkedFamilies = false, defaultSelectedPersonId,
 }: Props) {
 
   // ── layout (passes marriages for spouse-row fix) ─────────────────────────
@@ -321,6 +322,13 @@ export function FamilyTree({
   // ── node selection ───────────────────────────────────────────────────────
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(false);
+
+  // auto-select person from ?person= query param (e.g. from search results)
+  useEffect(() => {
+    if (!defaultSelectedPersonId) return;
+    const target = [...persons, ...linkedPersons].find((p) => p.id === defaultSelectedPersonId);
+    if (target) setSelectedPerson(target);
+  }, [defaultSelectedPersonId, persons, linkedPersons]);
 
   const handleSearchSelect = useCallback((personId: string) => {
     const pos = positions.get(personId);

@@ -13,6 +13,9 @@ function hasCurrentPrismaDelegates(client: PrismaClient | undefined) {
   const maybeClient = client as PrismaClient & {
     homelandPlace?: { findMany?: unknown };
     homelandPlaceRequest?: { findMany?: unknown };
+    personFamilyMembership?: { findMany?: unknown };
+    crossFamilyMarriageRequest?: { findMany?: unknown };
+    branchUnificationRequest?: { findMany?: unknown };
     _runtimeDataModel?: {
       models?: {
         AdminRequest?: {
@@ -29,6 +32,9 @@ function hasCurrentPrismaDelegates(client: PrismaClient | undefined) {
   return (
     typeof maybeClient.homelandPlace?.findMany === "function" &&
     typeof maybeClient.homelandPlaceRequest?.findMany === "function" &&
+    typeof maybeClient.personFamilyMembership?.findMany === "function" &&
+    typeof maybeClient.crossFamilyMarriageRequest?.findMany === "function" &&
+    typeof maybeClient.branchUnificationRequest?.findMany === "function" &&
     adminRequestFields.some((field) => field.name === "applicantRelationship") &&
     adminRequestFields.some((field) => field.name === "applicantMessage") &&
     adminRequestFields.some((field) => field.name === "applicantContactEmail") &&

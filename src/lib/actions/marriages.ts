@@ -3,6 +3,11 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import {
+  validateActiveMarriageLimits,
+  validateConcurrentMarriageCombination,
+  validateRemarriage,
+} from "@/lib/domain/family-rules/marriage-validators";
 
 export type MarriageResult = { success: true } | { success: false; error: string };
 
@@ -14,9 +19,18 @@ async function canManageFamily(userId: string, familyId: string, isSystemAdmin: 
   return !!assignment;
 }
 
-// ─── Server-side mahram check ──────────────────────────────────────────────────
-async function isMahram(personAId: string, personBId: string): Promise<boolean> {
-  // 1. Direct ancestor or descendant (any depth)
+// ─── Server-side blood-mahram check (confidence-aware) ────────────────────────
+// Returns:
+//   "MAHRAM"     — confirmed via VERIFIED or LIKELY relations
+//   "UNCERTAIN"  — no confirmed path but UNVERIFIED/DISPUTED relations may conceal one
+//   "NOT_MAHRAM" — no mahram path and all checked relations are reliable
+type BloodMahramResult = "MAHRAM" | "UNCERTAIN" | "NOT_MAHRAM";
+
+async function isMahram(personAId: string, personBId: string): Promise<BloodMahramResult> {
+  const unreliable = (c: string) => c === "UNVERIFIED" || c === "DISPUTED";
+  let hasUncertainRelations = false;
+
+  // 1. Direct ancestor or descendant (PersonAncestry is built from BIOLOGICAL only)
   const ancestry = await db.personAncestry.findFirst({
     where: {
       OR: [
@@ -25,60 +39,67 @@ async function isMahram(personAId: string, personBId: string): Promise<boolean> 
       ],
     },
   });
-  if (ancestry) return true;
+  if (ancestry) return "MAHRAM";
 
-  // 2. Siblings (share at least one common parent)
+  // 2. Siblings (share at least one common biological parent)
   const [parentsA, parentsB] = await Promise.all([
-    db.parentChildRelation.findMany({ where: { childPersonId: personAId }, select: { parentPersonId: true } }),
-    db.parentChildRelation.findMany({ where: { childPersonId: personBId }, select: { parentPersonId: true } }),
+    db.parentChildRelation.findMany({
+      where: { childPersonId: personAId, relationType: "BIOLOGICAL" },
+      select: { parentPersonId: true, confidence: true },
+    }),
+    db.parentChildRelation.findMany({
+      where: { childPersonId: personBId, relationType: "BIOLOGICAL" },
+      select: { parentPersonId: true, confidence: true },
+    }),
   ]);
-  const parentSetA = new Set(parentsA.map((p) => p.parentPersonId));
-  const parentSetB = new Set(parentsB.map((p) => p.parentPersonId));
-  for (const pid of parentSetA) {
-    if (parentSetB.has(pid)) return true;
+
+  if (parentsA.some((p) => unreliable(p.confidence)) || parentsB.some((p) => unreliable(p.confidence))) {
+    hasUncertainRelations = true;
   }
 
-  // 3. Aunts & Uncles — personB is a child of personA's grandparents (but not personA's parent)
-  if (parentSetA.size > 0) {
+  const reliableParentSetA = new Set(parentsA.filter((p) => !unreliable(p.confidence)).map((p) => p.parentPersonId));
+  const reliableParentSetB = new Set(parentsB.filter((p) => !unreliable(p.confidence)).map((p) => p.parentPersonId));
+  const allParentSetA = new Set(parentsA.map((p) => p.parentPersonId));
+  const allParentSetB = new Set(parentsB.map((p) => p.parentPersonId));
+
+  for (const pid of reliableParentSetA) {
+    if (reliableParentSetB.has(pid)) return "MAHRAM";
+  }
+
+  // 3. Aunts & Uncles
+  if (reliableParentSetA.size > 0) {
     const gpRowsA = await db.parentChildRelation.findMany({
-      where: { childPersonId: { in: [...parentSetA] } },
-      select: { parentPersonId: true },
+      where: { childPersonId: { in: [...reliableParentSetA] }, relationType: "BIOLOGICAL" },
+      select: { parentPersonId: true, confidence: true },
     });
-    const gpIdsA = [...new Set(gpRowsA.map((r) => r.parentPersonId))];
-    if (gpIdsA.length > 0) {
+    if (gpRowsA.some((r) => unreliable(r.confidence))) hasUncertainRelations = true;
+    const reliableGpIdsA = [...new Set(gpRowsA.filter((r) => !unreliable(r.confidence)).map((r) => r.parentPersonId))];
+    if (reliableGpIdsA.length > 0) {
       const auntUncle = await db.parentChildRelation.findFirst({
-        where: {
-          parentPersonId: { in: gpIdsA },
-          childPersonId: personBId,
-          NOT: { childPersonId: { in: [...parentSetA] } },
-        },
+        where: { parentPersonId: { in: reliableGpIdsA }, childPersonId: personBId, NOT: { childPersonId: { in: [...allParentSetA] } } },
       });
-      if (auntUncle) return true;
+      if (auntUncle) return "MAHRAM";
     }
   }
-  // Reverse: personA is uncle/aunt of personB
-  if (parentSetB.size > 0) {
+  if (reliableParentSetB.size > 0) {
     const gpRowsB = await db.parentChildRelation.findMany({
-      where: { childPersonId: { in: [...parentSetB] } },
-      select: { parentPersonId: true },
+      where: { childPersonId: { in: [...reliableParentSetB] }, relationType: "BIOLOGICAL" },
+      select: { parentPersonId: true, confidence: true },
     });
-    const gpIdsB = [...new Set(gpRowsB.map((r) => r.parentPersonId))];
-    if (gpIdsB.length > 0) {
+    if (gpRowsB.some((r) => unreliable(r.confidence))) hasUncertainRelations = true;
+    const reliableGpIdsB = [...new Set(gpRowsB.filter((r) => !unreliable(r.confidence)).map((r) => r.parentPersonId))];
+    if (reliableGpIdsB.length > 0) {
       const auntUncle = await db.parentChildRelation.findFirst({
-        where: {
-          parentPersonId: { in: gpIdsB },
-          childPersonId: personAId,
-          NOT: { childPersonId: { in: [...parentSetB] } },
-        },
+        where: { parentPersonId: { in: reliableGpIdsB }, childPersonId: personAId, NOT: { childPersonId: { in: [...allParentSetB] } } },
       });
-      if (auntUncle) return true;
+      if (auntUncle) return "MAHRAM";
     }
   }
 
-  // 4. Nieces & Nephews — personB is a descendant of personA's sibling (and vice versa)
-  if (parentSetA.size > 0) {
+  // 4. Nieces & Nephews
+  if (reliableParentSetA.size > 0) {
     const siblingsA = await db.parentChildRelation.findMany({
-      where: { parentPersonId: { in: [...parentSetA] }, NOT: { childPersonId: personAId } },
+      where: { parentPersonId: { in: [...reliableParentSetA] }, relationType: "BIOLOGICAL", NOT: { childPersonId: personAId } },
       select: { childPersonId: true },
     });
     const sibIdsA = siblingsA.map((s) => s.childPersonId);
@@ -86,12 +107,12 @@ async function isMahram(personAId: string, personBId: string): Promise<boolean> 
       const niece = await db.personAncestry.findFirst({
         where: { ancestorId: { in: sibIdsA }, descendantId: personBId, depth: { gt: 0 } },
       });
-      if (niece) return true;
+      if (niece) return "MAHRAM";
     }
   }
-  if (parentSetB.size > 0) {
+  if (reliableParentSetB.size > 0) {
     const siblingsB = await db.parentChildRelation.findMany({
-      where: { parentPersonId: { in: [...parentSetB] }, NOT: { childPersonId: personBId } },
+      where: { parentPersonId: { in: [...reliableParentSetB] }, relationType: "BIOLOGICAL", NOT: { childPersonId: personBId } },
       select: { childPersonId: true },
     });
     const sibIdsB = siblingsB.map((s) => s.childPersonId);
@@ -99,11 +120,11 @@ async function isMahram(personAId: string, personBId: string): Promise<boolean> 
       const niece = await db.personAncestry.findFirst({
         where: { ancestorId: { in: sibIdsB }, descendantId: personAId, depth: { gt: 0 } },
       });
-      if (niece) return true;
+      if (niece) return "MAHRAM";
     }
   }
 
-  return false;
+  return hasUncertainRelations ? "UNCERTAIN" : "NOT_MAHRAM";
 }
 
 export async function addMarriage(
@@ -129,6 +150,15 @@ export async function addMarriage(
     return { success: false, error: "يجب أن يكون الزواج بين ذكر وأنثى" };
   }
 
+  // Cross-family marriages require a formal approval workflow
+  if (personA.familyId !== personB.familyId) {
+    return {
+      success: false,
+      error:
+        "الشخصان من عائلتين مختلفتين — يجب استخدام مسار طلب الزواج العابر للعائلتين للحصول على موافقة الطرفين",
+    };
+  }
+
   // User must be able to manage at least one of the two families
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
   const [canManageA, canManageB] = await Promise.all([
@@ -139,29 +169,75 @@ export async function addMarriage(
     return { success: false, error: "لا تملك صلاحية التعديل" };
   }
 
-  // Mahram check (blood-relation prohibition)
-  const mahramRelated = await isMahram(personAId, personBId);
-  if (mahramRelated) {
+  // Mahram check (blood-relation prohibition, confidence-aware)
+  const mahramResult = await isMahram(personAId, personBId);
+  if (mahramResult === "MAHRAM") {
     return { success: false, error: "لا يجوز الزواج — المحرمات من النسب" };
   }
+  if (mahramResult === "UNCERTAIN") {
+    return { success: false, error: "تعذر التحقق من سلامة الزواج — بعض علاقات النسب غير موثوقة. يرجى توثيق علاقات النسب أولاً" };
+  }
 
-  const existing = await db.marriageRelation.findFirst({
-    where: {
-      deletedAt: null,
-      OR: [
-        { personAId, personBId },
-        { personAId: personBId, personBId: personAId },
-      ],
-    },
-  });
-  if (existing) return { success: false, error: "علاقة الزواج موجودة بالفعل" };
+  // Affinity mahram check (زوجة الأب، زوجة الابن، أم الزوجة، الربيبة)
+  const { validateAffinityMahram } = await import("@/lib/domain/family-rules/affinity-validators");
+  const affinityResult = await validateAffinityMahram(personAId, personBId, db);
+  if (affinityResult.status === "PROHIBITED") {
+    return { success: false, error: affinityResult.message };
+  }
 
+  // Nursing mahram check (محرمات الرضاعة — يحرم من الرضاع ما يحرم من النسب)
+  const { validateNursingMahram } = await import("@/lib/domain/family-rules/nursing-validators");
+  const nursingResult = await validateNursingMahram(personAId, personBId, db);
+  if (nursingResult.status === "PROHIBITED" || nursingResult.status === "INSUFFICIENT_DATA") {
+    return { success: false, error: nursingResult.message };
+  }
+
+  // Duplicate active marriage check (allows remarriage after ENDED)
+  const remarriageResult = await validateRemarriage(personAId, personBId, db);
+  if (remarriageResult.status === "PROHIBITED") {
+    return { success: false, error: remarriageResult.message };
+  }
+
+  // Active marriage limits: max 4 wives for male, max 1 husband for female
+  const limitsResult = await validateActiveMarriageLimits(personAId, personBId, db);
+  if (limitsResult.status === "PROHIBITED") {
+    return { success: false, error: limitsResult.message };
+  }
+
+  // Concurrent combination prohibition (Jama' between blood mahrams)
+  const maleId = personA.gender === "MALE" ? personAId : personBId;
+  const femaleId = personA.gender === "MALE" ? personBId : personAId;
+  const combinationResult = await validateConcurrentMarriageCombination(maleId, femaleId, db);
+  if (combinationResult.status === "PROHIBITED") {
+    return { success: false, error: combinationResult.message };
+  }
+
+  // Validate marriage date against birth/death dates of both parties
+  const { validateMarriageChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+  const marriageChronoResult = await validateMarriageChronology(
+    personAId,
+    personBId,
+    options?.marriageDate ?? null,
+    null,
+    db
+  );
+  if (marriageChronoResult.status === "PROHIBITED") {
+    return { success: false, error: marriageChronoResult.message };
+  }
+
+  // Auto-determine status: if both persons are deceased, record as HISTORICAL rather than ACTIVE
+  const bothDeceased = !personA.isLiving && !personB.isLiving;
+  const initialStatus = bothDeceased ? "HISTORICAL" : "ACTIVE";
+
+  // Normalize order so the partial unique index (LEAST/GREATEST) works consistently
+  const [normalizedA, normalizedB] = [personAId, personBId].sort();
   await db.marriageRelation.create({
     data: {
-      personAId,
-      personBId,
+      personAId: normalizedA,
+      personBId: normalizedB,
       marriageDate: options?.marriageDate ? new Date(options.marriageDate) : null,
       notes: options?.notes ?? null,
+      status: initialStatus,
     },
   });
 
@@ -212,7 +288,8 @@ export async function removeMarriage(marriageId: string): Promise<MarriageResult
 
 export async function divorceMarriage(
   marriageId: string,
-  divorceDate?: string
+  divorceDate?: string,
+  endReason?: "DIVORCE" | "DEATH_OF_SPOUSE" | "ANNULMENT" | "UNKNOWN"
 ): Promise<MarriageResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
@@ -236,11 +313,21 @@ export async function divorceMarriage(
     return { success: false, error: "لا تملك صلاحية تسجيل الطلاق" };
   }
 
+  // Validate divorce date is after marriage date
+  if (divorceDate) {
+    const { validateDivorceChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+    const divorceChronoResult = await validateDivorceChronology(marriageId, divorceDate, db);
+    if (divorceChronoResult.status === "PROHIBITED") {
+      return { success: false, error: divorceChronoResult.message };
+    }
+  }
+
   await db.marriageRelation.update({
     where: { id: marriageId },
     data: {
       status: "ENDED",
       divorceDate: divorceDate ? new Date(divorceDate) : null,
+      endReason: endReason ?? "DIVORCE",
     },
   });
 
