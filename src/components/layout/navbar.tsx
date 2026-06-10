@@ -62,7 +62,7 @@ export async function Navbar({ minimal = false }: { minimal?: boolean } = {}) {
                   </Button>
                 )}
                 <Button variant="outline" size="sm" className="text-xs h-8 border-border/50 hover:border-border" asChild>
-                  <Link href="/api/auth/signout">{labels.logout}</Link>
+                  <Link href="/signout">{labels.logout}</Link>
                 </Button>
               </>
             ) : (

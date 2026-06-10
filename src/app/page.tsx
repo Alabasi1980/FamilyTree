@@ -4,6 +4,7 @@ import { Navbar } from "@/components/layout/navbar";
 import { HeroSection } from "@/components/layout/hero-section";
 import { HomelandGarden, type HomelandGardenPlot } from "@/components/homelands/homeland-garden";
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import type { Family } from "@/generated/prisma/client";
 import { Sprout, TreePine, Search, UserPlus } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
@@ -24,7 +25,7 @@ const labels = {
   footer: "بستان الأصول — حفظ التاريخ العائلي للأجيال القادمة",
 };
 
-async function FamiliesGarden() {
+async function FamiliesGarden({ isLoggedIn }: { isLoggedIn: boolean }) {
   const families = await db.family.findMany({
     where: { isPublic: true, deletedAt: null },
     include: { _count: { select: { persons: true } } },
@@ -55,7 +56,7 @@ async function FamiliesGarden() {
             ابحث عن عائلة
           </Link>
           <Link
-            href={withBasePath("/register")}
+            href={withBasePath(isLoggedIn ? "/dashboard/families/new" : "/register")}
             className="flex items-center gap-2 rounded-lg bg-accent/20 border border-accent/30 px-4 py-2.5 text-sm text-accent hover:bg-accent/30 transition-all"
           >
             <UserPlus className="h-4 w-4" />
@@ -108,7 +109,8 @@ function GardenSkeleton() {
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -155,7 +157,7 @@ export default function HomePage() {
           </div>
 
           <Suspense fallback={<GardenSkeleton />}>
-            <FamiliesGarden />
+            <FamiliesGarden isLoggedIn={!!session?.user} />
           </Suspense>
         </section>
       </main>

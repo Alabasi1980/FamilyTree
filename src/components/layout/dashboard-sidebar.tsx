@@ -218,14 +218,14 @@ export function DashboardSidebar({ user, unreadNotifications = 0 }: { user: Side
             <Settings className="h-4 w-4" />
             الإعدادات
           </Link>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: withBasePath("/") })}
+          <Link
+            href="/signout"
+            onClick={close}
             className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
             <LogOut className="h-4 w-4" />
             خروج
-          </button>
+          </Link>
         </div>
 
         {/* خط سفلي */}
