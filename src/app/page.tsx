@@ -1,10 +1,11 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { HeroSection } from "@/components/layout/hero-section";
 import { HomelandGarden, type HomelandGardenPlot } from "@/components/homelands/homeland-garden";
 import { db } from "@/lib/db";
 import type { Family } from "@/generated/prisma/client";
-import { Sprout, TreePine } from "lucide-react";
+import { Sprout, TreePine, Search, UserPlus } from "lucide-react";
 import { withBasePath } from "@/lib/base-path";
 import { formatFamilyHomeland, getFamilyHomelandKey } from "@/lib/family-homeland";
 
@@ -33,14 +34,34 @@ async function FamiliesGarden() {
 
   if (families.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-        <div className="flex items-end gap-1 text-muted-foreground/30">
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-6 px-4">
+        <div className="flex items-end gap-1 text-muted-foreground/20">
           <TreePine className="h-8 w-8" />
-          <TreePine className="h-12 w-12" />
+          <TreePine className="h-14 w-14" />
           <TreePine className="h-8 w-8" />
         </div>
-        <p className="text-lg text-muted-foreground">{labels.noPublicFamilies}</p>
-        <p className="text-sm text-muted-foreground/60">{labels.firstFamily}</p>
+        <div className="space-y-2 max-w-sm">
+          <p className="text-lg font-semibold text-foreground">{labels.noPublicFamilies}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            بستان الأصول هو مساحة لتوثيق أنساب العائلات بشكل مرتب وآمن. يمكنك البحث عن عائلتك أو البدء بتسجيل شجرة عائلتك.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link
+            href={withBasePath("/search")}
+            className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-4 py-2.5 text-sm text-foreground hover:border-accent/40 hover:bg-card/80 transition-all"
+          >
+            <Search className="h-4 w-4 text-accent" />
+            ابحث عن عائلة
+          </Link>
+          <Link
+            href={withBasePath("/register")}
+            className="flex items-center gap-2 rounded-lg bg-accent/20 border border-accent/30 px-4 py-2.5 text-sm text-accent hover:bg-accent/30 transition-all"
+          >
+            <UserPlus className="h-4 w-4" />
+            {labels.firstFamily}
+          </Link>
+        </div>
       </div>
     );
   }

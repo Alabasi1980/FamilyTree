@@ -121,7 +121,42 @@ export default async function FamilyPublicPage({ params, searchParams }: Props) 
     orderBy: { fullName: "asc" },
   });
 
-  if (!family.isPublic && !isFamilyAdmin) notFound();
+  if (!family.isPublic && !isFamilyAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border/50 bg-card/60">
+            <Lock className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold text-foreground">
+              عائلة <span className="text-accent">{family.name}</span> — خاصة
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              هذه العائلة خاصة. لا تملك صلاحية الوصول إليها بصفتك الحالية.
+            </p>
+          </div>
+          {isLoggedIn && (
+            <JoinAdminRequestButton
+              familyId={family.id}
+              hasPendingRequest={hasPendingJoinRequest}
+              initialContactEmail={viewer?.email}
+              initialContactPhone={viewer?.phone}
+            />
+          )}
+          {!isLoggedIn && (
+            <Link
+              href={withBasePath(`/login?callbackUrl=${encodeURIComponent(withBasePath(`/family/${encodeURIComponent(slug)}`))}`)}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              تسجيل الدخول
+            </Link>
+          )}
+        </main>
+      </div>
+    );
+  }
   const homeland = formatFamilyHomeland(family);
 
   // 5. First parallel batch: family links (needed to find linked persons)

@@ -1,11 +1,11 @@
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, TreePine, ClipboardList, Shield } from "lucide-react";
+import { Users, TreePine, ClipboardList, Shield, ShieldAlert, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboard() {
-  const [totalUsers, totalFamilies, totalPersons, pendingAdminReqs, pendingEditReqs, activeComplaints] =
+  const [totalUsers, totalFamilies, totalPersons, pendingAdminReqs, pendingEditReqs, activeComplaints, auditIssues] =
     await Promise.all([
       db.user.count({ where: { deletedAt: null } }),
       db.family.count({ where: { deletedAt: null } }),
@@ -13,6 +13,18 @@ export default async function AdminDashboard() {
       db.adminRequest.count({ where: { status: "PENDING" } }),
       db.editRequest.count({ where: { status: "PENDING" } }),
       db.complaint.count({ where: { status: { in: ["OPEN", "IN_REVIEW", "WAITING_USER"] } } }),
+      // Quick audit: women with multiple active marriages
+      db.marriageRelation.findMany({
+        where: { status: "ACTIVE", deletedAt: null },
+        select: { personA: { select: { gender: true } }, personB: { select: { gender: true } }, personAId: true, personBId: true },
+      }).then((rows) => {
+        const counts = new Map<string, number>();
+        for (const r of rows) {
+          if (r.personA.gender === "FEMALE") counts.set(r.personAId, (counts.get(r.personAId) ?? 0) + 1);
+          if (r.personB.gender === "FEMALE") counts.set(r.personBId, (counts.get(r.personBId) ?? 0) + 1);
+        }
+        return [...counts.values()].filter((n) => n > 1).length;
+      }),
     ]);
 
   const recentRequests = await db.adminRequest.findMany({
@@ -77,6 +89,25 @@ export default async function AdminDashboard() {
           </Link>
         ))}
       </div>
+
+      {/* Audit status card */}
+      <Link href="/admin/audit">
+        <Card className={`hover:border-accent/40 transition-colors ${auditIssues > 0 ? "border-destructive/40" : "border-green-800/40"}`}>
+          <CardContent className="pt-4 pb-3 px-4 flex items-center gap-3">
+            {auditIssues > 0 ? (
+              <ShieldAlert className="h-5 w-5 shrink-0 text-destructive" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+            )}
+            <div className="min-w-0">
+              <p className={`text-sm font-medium ${auditIssues > 0 ? "text-destructive" : "text-green-400"}`}>
+                {auditIssues > 0 ? `${auditIssues} مشكلة في سلامة البيانات` : "قاعدة البيانات سليمة"}
+              </p>
+              <p className="text-xs text-muted-foreground">تدقيق العلاقات والزيجات والتواريخ</p>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Pending admin requests */}
       <Card>

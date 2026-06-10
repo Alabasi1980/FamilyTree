@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, HeartCrack, Trash2, Loader2, Plus, X } from "lucide-react";
+import { Heart, HeartCrack, Trash2, Loader2, Plus, X, Send, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { addMarriage, removeMarriage, divorceMarriage } from "@/lib/actions/marriages";
+import { submitCrossMarriageRequest } from "@/lib/actions/cross-family-marriages";
 import PersonCombobox from "@/components/persons/person-combobox";
 
 interface PersonOption {
@@ -43,6 +44,7 @@ export default function MarriageManager({ persons, linkedPersons = [], marriages
   // Divorce state
   const [divorceTargetId, setDivorceTargetId] = useState<string | null>(null);
   const [divorceDateInput, setDivorceDateInput] = useState("");
+  const [crossSuccess, setCrossSuccess] = useState("");
 
   // Use locked person A directly from prop if provided, otherwise fall back to state
   const effectivePersonAId = lockedPersonA?.id ?? personAId;
@@ -82,6 +84,29 @@ export default function MarriageManager({ persons, linkedPersons = [], marriages
       }
       setDivorceTargetId(null);
       setDivorceDateInput("");
+      router.refresh();
+    });
+  }
+
+  // Detect if selected personB is from a linked (cross-family) person
+  const isCrossFamily = linkedPersons.some((p) => p.id === personBId);
+
+  async function handleCrossMarriageRequest() {
+    if (!effectivePersonAId || !personBId) return;
+    setError("");
+    startTransition(async () => {
+      const result = await submitCrossMarriageRequest(effectivePersonAId, personBId, {
+        marriageDate: marriageDate || undefined,
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      if (!lockedPersonA) setPersonAId("");
+      setPersonBId("");
+      setMarriageDate("");
+      setCrossSuccess("تم إرسال طلب الزواج العابر للعائلتين بنجاح — في انتظار موافقة العائلة الأخرى");
+      setTimeout(() => setCrossSuccess(""), 5000);
       router.refresh();
     });
   }
@@ -195,7 +220,14 @@ export default function MarriageManager({ persons, linkedPersons = [], marriages
 
       {/* Add marriage form */}
       <div className="space-y-2 pt-2 border-t border-border">
-        <p className="text-xs font-medium text-muted-foreground">إضافة زواج جديد</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">إضافة زواج جديد</p>
+          {linkedPersons.length > 0 && (
+            <p className="text-[10px] text-muted-foreground/60 leading-relaxed text-left">
+              الأشخاص من عائلة مرتبطة ← طلب زواج عابر
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-2">
           {/* Locked person A display */}
           {lockedPersonA ? (
@@ -233,17 +265,37 @@ export default function MarriageManager({ persons, linkedPersons = [], marriages
         {error && (
           <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1">{error}</p>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full text-xs h-8"
-          onClick={handleAdd}
-          disabled={isPending || !effectivePersonAId || !personBId}
-        >
-          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin ml-1" /> : <Plus className="h-3.5 w-3.5 ml-1" />}
-          إضافة
-        </Button>
+        {crossSuccess && (
+          <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-2.5 py-1.5 text-xs text-green-600">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            {crossSuccess}
+          </div>
+        )}
+        {isCrossFamily ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full text-xs h-8 border-rose-500/40 text-rose-500 hover:bg-rose-500/10 hover:text-rose-500"
+            onClick={handleCrossMarriageRequest}
+            disabled={isPending || !effectivePersonAId || !personBId}
+          >
+            {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin ml-1" /> : <Send className="h-3.5 w-3.5 ml-1" />}
+            طلب زواج عابر للعائلتين
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full text-xs h-8"
+            onClick={handleAdd}
+            disabled={isPending || !effectivePersonAId || !personBId}
+          >
+            {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin ml-1" /> : <Plus className="h-3.5 w-3.5 ml-1" />}
+            إضافة
+          </Button>
+        )}
       </div>
     </div>
   );

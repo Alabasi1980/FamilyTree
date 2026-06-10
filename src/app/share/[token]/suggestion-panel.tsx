@@ -180,6 +180,10 @@ export default function SuggestionPanel({ shareToken, persons, familyName }: Pro
               {/* Mode selection */}
               {mode === "idle" && (
                 <div className="space-y-2">
+                  <div className="rounded-lg bg-muted/30 border border-border/30 px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed space-y-1">
+                    <p>اقتراحاتك تُراجع من قِبل مسؤول عائلة <span className="font-medium text-foreground">{familyName}</span> وتُطبَّق بعد موافقته.</p>
+                    <p className="text-[10px]">لن تظهر أي تغييرات في الشجرة حتى تتم الموافقة.</p>
+                  </div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">نوع الاقتراح</p>
                   <button
                     onClick={() => setMode("add_person")}

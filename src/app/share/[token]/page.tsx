@@ -36,7 +36,7 @@ export default async function ShareLinkPage({ params }: Props) {
   if (link.expiresAt && link.expiresAt < new Date()) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navbar />
+        <Navbar minimal />
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground">
           <AlertTriangle className="h-12 w-12 text-yellow-500" />
           <p className="text-lg font-medium">انتهت صلاحية هذا الرابط</p>
@@ -170,7 +170,7 @@ export default async function ShareLinkPage({ params }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
+      <Navbar minimal />
 
       <main className="flex-1 flex flex-col">
         {/* Family header */}

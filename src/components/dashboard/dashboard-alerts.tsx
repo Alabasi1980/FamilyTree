@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { MailWarning, Phone, TreePine, Loader2, CheckCircle2, ChevronDown, ChevronUp, X } from "lucide-react";
 import { sendVerificationEmail } from "@/lib/actions/verification";
@@ -17,6 +17,23 @@ export function DashboardAlerts({ emailVerified, hasPhone, linkedPersonId, isGoo
   const [isPending, startTransition] = useTransition();
   const [collapsed, setCollapsed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("bastan_alerts_dismissed") === "1") setDismissed(true);
+    if (localStorage.getItem("bastan_alerts_collapsed") === "1") setCollapsed(true);
+  }, []);
+
+  function handleDismiss() {
+    setDismissed(true);
+    localStorage.setItem("bastan_alerts_dismissed", "1");
+  }
+
+  function handleCollapse() {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("bastan_alerts_collapsed", next ? "1" : "0");
+  }
 
   const showEmailAlert = !isGoogleUser && !emailVerified;
   const showPhoneAlert = !hasPhone;
@@ -50,7 +67,7 @@ export function DashboardAlerts({ emailVerified, hasPhone, linkedPersonId, isGoo
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/30">
         <button
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={handleCollapse}
           className="flex items-center gap-2.5 flex-1 text-right"
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-900/30 border border-amber-700/40">
@@ -73,7 +90,7 @@ export function DashboardAlerts({ emailVerified, hasPhone, linkedPersonId, isGoo
         </button>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={handleDismiss}
           className="text-muted-foreground/50 hover:text-muted-foreground transition-colors shrink-0"
           title="إخفاء"
         >

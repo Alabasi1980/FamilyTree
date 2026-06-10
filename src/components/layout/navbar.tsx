@@ -14,7 +14,7 @@ const labels = {
   search: "بحث",
 };
 
-export async function Navbar() {
+export async function Navbar({ minimal = false }: { minimal?: boolean } = {}) {
   const session = await auth();
 
   return (
@@ -41,19 +41,22 @@ export async function Navbar() {
 
           {/* Nav actions */}
           <nav className="flex items-center gap-1.5 shrink-0">
-            {/* Search icon — رابط لصفحة البحث */}
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5" asChild>
-              <Link href="/search">
-                <Search className="h-4 w-4" />
-                <span className="hidden sm:inline text-xs">{labels.search}</span>
-              </Link>
-            </Button>
+            {!minimal && (
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground h-8 gap-1.5" asChild>
+                <Link href="/search">
+                  <Search className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">{labels.search}</span>
+                </Link>
+              </Button>
+            )}
             {session?.user ? (
               <>
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
-                  <Link href="/dashboard">{labels.dashboard}</Link>
-                </Button>
-                {session.user.accountType === "SYSTEM_ADMIN" && (
+                {!minimal && (
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
+                    <Link href="/dashboard">{labels.dashboard}</Link>
+                  </Button>
+                )}
+                {!minimal && session.user.accountType === "SYSTEM_ADMIN" && (
                   <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
                     <Link href="/admin">{labels.admin}</Link>
                   </Button>
@@ -67,13 +70,15 @@ export async function Navbar() {
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-xs h-8" asChild>
                   <Link href="/login">{labels.login}</Link>
                 </Button>
-                <Button
-                  size="sm"
-                  className="h-8 text-xs bg-accent/20 hover:bg-accent/30 text-accent border border-accent/30 hover:border-accent/50 transition-all duration-200"
-                  asChild
-                >
-                  <Link href="/register">{labels.register}</Link>
-                </Button>
+                {!minimal && (
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-accent/20 hover:bg-accent/30 text-accent border border-accent/30 hover:border-accent/50 transition-all duration-200"
+                    asChild
+                  >
+                    <Link href="/register">{labels.register}</Link>
+                  </Button>
+                )}
               </>
             )}
           </nav>

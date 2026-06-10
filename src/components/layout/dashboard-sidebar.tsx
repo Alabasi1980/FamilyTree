@@ -43,6 +43,7 @@ const adminNav = [
   { href: "/admin/families", label: "كل العائلات", icon: TreePine, exact: false },
   { href: "/admin/homelands", label: "إدارة المواطن", icon: MapPinned, exact: false },
   { href: "/admin/complaints", label: "الشكاوى", icon: AlertTriangle, exact: false },
+  { href: "/admin/audit", label: "تدقيق البيانات", icon: ShieldAlert, exact: false },
 ];
 
 // ── Shared nav link ──────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  UserPlus, UserMinus, Plus, X, Loader2,
+  UserPlus, UserMinus, Plus, X, Loader2, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PersonCombobox from "@/components/persons/person-combobox";
@@ -49,6 +49,12 @@ function RelationSection({
   const [newName, setNewName] = useState("");
   const [newGender, setNewGender] = useState<"MALE" | "FEMALE">("MALE");
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+
+  const showSuccess = useCallback((msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(""), 3500);
+  }, []);
 
   const isWorking = isPending || sectionPending;
 
@@ -68,6 +74,7 @@ function RelationSection({
   async function handleAddExisting() {
     if (!selectedId) return;
     setError("");
+    const selectedName = allPersons.find((p) => p.id === selectedId)?.fullName ?? "";
     startSectionTransition(async () => {
       const result =
         role === "parent"
@@ -79,6 +86,11 @@ function RelationSection({
         return;
       }
       reset();
+      showSuccess(
+        role === "parent"
+          ? `تم ربط ${selectedName} كوالد بنجاح`
+          : `تم ربط ${selectedName} كابن/بنت بنجاح`
+      );
       router.refresh();
     });
   }
@@ -86,23 +98,37 @@ function RelationSection({
   async function handleAddNew() {
     if (!newName.trim()) { setError("الاسم مطلوب"); return; }
     setError("");
+    const nameToShow = newName.trim();
     startSectionTransition(async () => {
       const result =
         role === "parent"
-          ? await createPersonAsParentOf(currentPersonId, { fullName: newName.trim(), gender: newGender })
-          : await createPersonAsChildOf(currentPersonId, { fullName: newName.trim(), gender: newGender });
+          ? await createPersonAsParentOf(currentPersonId, { fullName: nameToShow, gender: newGender })
+          : await createPersonAsChildOf(currentPersonId, { fullName: nameToShow, gender: newGender });
 
       if (!result.success) {
         setError(result.error ?? "حدث خطأ");
         return;
       }
       reset();
+      showSuccess(
+        role === "parent"
+          ? `تم إنشاء ${nameToShow} وربطه كوالد بنجاح`
+          : `تم إنشاء ${nameToShow} وربطه كابن/بنت بنجاح`
+      );
       router.refresh();
     });
   }
 
   return (
     <div className="space-y-2">
+      {/* Success message */}
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-2.5 py-1.5 text-xs text-green-600">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          {successMsg}
+        </div>
+      )}
+
       {/* Section header */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-foreground">{title}</h4>

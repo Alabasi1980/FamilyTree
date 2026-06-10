@@ -243,6 +243,9 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-foreground">الطلبات</h1>
 
+      {/* Request lifecycle info */}
+      <RequestTimeline />
+
       {isFamilyAdmin && (
         <Card>
           <CardHeader className="pb-3">
@@ -667,6 +670,40 @@ function JoinAdminRequestDetails({
           {message}
         </p>
       )}
+    </div>
+  );
+}
+
+function RequestTimeline() {
+  const steps = [
+    { label: "تقديم الطلب", desc: "يُرسل الطلب ويظهر في قائمة المراجعة" },
+    { label: "قيد المراجعة", desc: "المسؤول يراجع الطلب ويتخذ القرار" },
+    { label: "النتيجة", desc: "موافقة أو رفض مع إشعار فوري" },
+  ];
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/20 px-4 py-3">
+      <p className="mb-2.5 text-xs font-medium text-muted-foreground">مسار الطلب</p>
+      <div className="flex items-start gap-0">
+        {steps.map((step, i) => (
+          <div key={i} className="flex flex-1 items-start">
+            <div className="flex flex-col items-center">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-background text-[10px] font-semibold text-muted-foreground">
+                {i + 1}
+              </div>
+              {i < steps.length - 1 && (
+                <div className="mt-0 h-px w-full" />
+              )}
+            </div>
+            <div className="mr-2 flex-1 pb-2 pl-4">
+              <p className="text-xs font-medium text-foreground">{step.label}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{step.desc}</p>
+            </div>
+            {i < steps.length - 1 && (
+              <div className="mt-3 h-px flex-none w-4 bg-border/40" />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

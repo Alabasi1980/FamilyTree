@@ -98,40 +98,52 @@ export default function ShareLinkManager({
       {links.map((link) => (
         <div
           key={link.token}
-          className="flex items-center gap-2 rounded-lg border border-border bg-background p-2 text-sm"
+          className="rounded-lg border border-border bg-background p-3 space-y-2"
         >
-          <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="font-mono text-xs text-muted-foreground truncate max-w-[160px]">
-            /share/{link.token.slice(0, 12)}…
-          </span>
-          {link.hasPassword && (
-            <span title="محمي بكلمة مرور">
-              <Lock className="h-3.5 w-3.5 text-yellow-500" />
-            </span>
-          )}
-          <span className="text-muted-foreground text-xs mr-auto">
-            {formatExpiry(link.expiresAt)}
-          </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            title="نسخ الرابط"
-            onClick={() => copyToClipboard(link.token)}
-            disabled={isPending}
-          >
-            <Copy className={`h-3.5 w-3.5 ${copiedToken === link.token ? "text-green-500" : ""}`} />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            title="إلغاء الرابط"
-            onClick={() => handleDelete(link.id, link.token)}
-            disabled={isPending}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {/* Full URL row */}
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              readOnly
+              aria-label="رابط المشاركة"
+              value={`${APP_URL}/share/${link.token}`}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="flex-1 min-w-0 h-7 rounded border border-input bg-muted/40 px-2 font-mono text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-text"
+              dir="ltr"
+            />
+            <Button
+              size="sm"
+              variant={copiedToken === link.token ? "default" : "outline"}
+              className="h-7 shrink-0 text-xs gap-1"
+              title="نسخ الرابط"
+              onClick={() => copyToClipboard(link.token)}
+              disabled={isPending}
+            >
+              <Copy className="h-3 w-3" />
+              {copiedToken === link.token ? "تم النسخ" : "نسخ"}
+            </Button>
+          </div>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pr-6">
+            {link.hasPassword && (
+              <span className="flex items-center gap-1 text-yellow-500">
+                <Lock className="h-3 w-3" />
+                محمي
+              </span>
+            )}
+            <span className="mr-auto">{formatExpiry(link.expiresAt)}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-destructive hover:text-destructive"
+              title="إلغاء الرابط"
+              onClick={() => handleDelete(link.id, link.token)}
+              disabled={isPending}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       ))}
 

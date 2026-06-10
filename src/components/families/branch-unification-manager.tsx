@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
-import { GitMerge, Loader2 } from "lucide-react";
+import { GitMerge, Loader2, ChevronLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { submitBranchUnificationRequest } from "@/lib/actions/branch-unification";
@@ -24,58 +24,27 @@ interface Props {
   targetFamilies: TargetFamilyOption[];
 }
 
-const labels = {
-  intro:
-    "\u0627\u0637\u0644\u0628 \u062a\u0648\u062d\u064a\u062f \u0641\u0631\u0639\u064a\u0646 \u062f\u0648\u0646 \u062d\u0630\u0641 \u0623\u064a \u0634\u062e\u0635. \u0633\u064a\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0648\u0627\u0644\u062f/\u0648\u0627\u0644\u062f\u0629 \u0645\u0634\u062a\u0631\u0643\u064a\u0646 \u0628\u0639\u062f \u0645\u0648\u0627\u0641\u0642\u0629 \u0627\u0644\u0637\u0631\u0641\u064a\u0646.",
-  localPerson:
-    "\u0634\u062e\u0635 \u0645\u0646 \u0639\u0627\u0626\u0644\u062a\u0643",
-  targetFamily:
-    "\u0627\u0644\u0639\u0627\u0626\u0644\u0629 \u0627\u0644\u0623\u062e\u0631\u0649",
-  targetPerson:
-    "\u0627\u0644\u0634\u062e\u0635 \u0645\u0646 \u0627\u0644\u0639\u0627\u0626\u0644\u0629 \u0627\u0644\u0623\u062e\u0631\u0649",
-  relationship:
-    "\u0646\u0648\u0639 \u0627\u0644\u0631\u0627\u0628\u0637",
-  full:
-    "\u0623\u062e\u0648\u0629 \u0623\u0634\u0642\u0627\u0621",
-  paternal:
-    "\u0623\u062e\u0648\u0629 \u0645\u0646 \u0627\u0644\u0623\u0628",
-  maternal:
-    "\u0623\u062e\u0648\u0629 \u0645\u0646 \u0627\u0644\u0623\u0645",
-  fatherName:
-    "\u0627\u0633\u0645 \u0627\u0644\u0648\u0627\u0644\u062f \u0627\u0644\u0645\u0634\u062a\u0631\u0643",
-  motherName:
-    "\u0627\u0633\u0645 \u0627\u0644\u0648\u0627\u0644\u062f\u0629 \u0627\u0644\u0645\u0634\u062a\u0631\u0643\u0629",
-  optional:
-    "\u0627\u062e\u062a\u064a\u0627\u0631\u064a",
-  notes:
-    "\u0645\u0644\u0627\u062d\u0638\u0629 \u0644\u0644\u0645\u0631\u0627\u062c\u0639\u0629",
-  submit:
-    "\u0625\u0631\u0633\u0627\u0644 \u0637\u0644\u0628 \u0627\u0644\u062a\u0648\u062d\u064a\u062f",
-  sent:
-    "\u062a\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0637\u0644\u0628",
-  choose:
-    "\u0627\u062e\u062a\u0631...",
-  error:
-    "\u062d\u062f\u062b \u062e\u0637\u0623",
-};
-
 export default function BranchUnificationManager({
   currentFamilyId,
   currentPersons,
   targetFamilies,
 }: Props) {
   const [isPending, startTransition] = useTransition();
+  const [step, setStep] = useState<1 | 2>(1);
   const [sourcePersonId, setSourcePersonId] = useState("");
   const [targetFamilyId, setTargetFamilyId] = useState("");
   const [targetPersonId, setTargetPersonId] = useState("");
   const [relationship, setRelationship] = useState<"FULL_SIBLINGS" | "PATERNAL_SIBLINGS" | "MATERNAL_SIBLINGS">("FULL_SIBLINGS");
+  const [showNotes, setShowNotes] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
 
   const selectedTargetFamily = useMemo(
-    () => targetFamilies.find((family) => family.id === targetFamilyId),
+    () => targetFamilies.find((f) => f.id === targetFamilyId),
     [targetFamilies, targetFamilyId]
   );
+
+  const step1Complete = !!sourcePersonId && !!targetFamilyId && !!targetPersonId;
 
   const textValue = (value: FormDataEntryValue | null) => (typeof value === "string" ? value : undefined);
 
@@ -99,92 +68,156 @@ export default function BranchUnificationManager({
       });
 
       if (!result.success) {
-        setError(result.error ?? labels.error);
+        setError(result.error ?? "حدث خطأ");
         return;
       }
 
       setSent(true);
+      setStep(1);
+      setSourcePersonId("");
       setTargetFamilyId("");
       setTargetPersonId("");
-      setSourcePersonId("");
+      setRelationship("FULL_SIBLINGS");
+      setShowNotes(false);
       formElement.reset();
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <p className="text-xs leading-6 text-muted-foreground">{labels.intro}</p>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <p className="text-xs leading-5 text-muted-foreground">
+        اطلب توحيد فرعين دون حذف أي شخص. سيتم إنشاء والد/والدة مشتركين بعد موافقة الطرفين.
+      </p>
 
-      <Select label={labels.localPerson} value={sourcePersonId} onChange={setSourcePersonId} required>
-        <option value="">{labels.choose}</option>
-        {currentPersons.map((person) => (
-          <option key={person.id} value={person.id}>
-            {person.fullName}
-          </option>
-        ))}
-      </Select>
-
-      <Select
-        label={labels.targetFamily}
-        value={targetFamilyId}
-        onChange={(value) => {
-          setTargetFamilyId(value);
-          setTargetPersonId("");
-        }}
-        required
-      >
-        <option value="">{labels.choose}</option>
-        {targetFamilies.map((family) => (
-          <option key={family.id} value={family.id}>
-            {family.name}
-          </option>
-        ))}
-      </Select>
-
-      <Select label={labels.targetPerson} value={targetPersonId} onChange={setTargetPersonId} required disabled={!selectedTargetFamily}>
-        <option value="">{labels.choose}</option>
-        {(selectedTargetFamily?.persons ?? []).map((person) => (
-          <option key={person.id} value={person.id}>
-            {person.fullName}
-          </option>
-        ))}
-      </Select>
-
-      <Select label={labels.relationship} value={relationship} onChange={(value) => setRelationship(value as typeof relationship)} required>
-        <option value="FULL_SIBLINGS">{labels.full}</option>
-        <option value="PATERNAL_SIBLINGS">{labels.paternal}</option>
-        <option value="MATERNAL_SIBLINGS">{labels.maternal}</option>
-      </Select>
-
-      {(relationship === "FULL_SIBLINGS" || relationship === "PATERNAL_SIBLINGS") && (
-        <Field name="sharedFatherName" label={`${labels.fatherName} (${labels.optional})`} />
-      )}
-      {(relationship === "FULL_SIBLINGS" || relationship === "MATERNAL_SIBLINGS") && (
-        <Field name="sharedMotherName" label={`${labels.motherName} (${labels.optional})`} />
-      )}
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">{labels.notes}</label>
-        <textarea
-          name="notes"
-          rows={2}
-          maxLength={1000}
-          className="w-full rounded-md border border-input bg-background/50 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-        />
+      {/* ── Step indicator ── */}
+      <div className="flex items-center gap-2 text-xs">
+        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? "bg-accent text-background" : "bg-accent/20 text-accent"}`}>
+          1
+        </span>
+        <span className={step === 1 ? "text-foreground font-medium" : "text-muted-foreground"}>اختر الأشخاص</span>
+        <ChevronLeft className="h-3 w-3 text-muted-foreground/50" />
+        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? "bg-accent text-background" : "bg-muted/30 text-muted-foreground"}`}>
+          2
+        </span>
+        <span className={step === 2 ? "text-foreground font-medium" : "text-muted-foreground"}>صلة القرابة</span>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      {sent && <p className="text-xs text-emerald-400">{labels.sent}</p>}
+      {/* ── Step 1: Who ── */}
+      {step === 1 && (
+        <div className="space-y-3">
+          <Select label="شخص من عائلتك" value={sourcePersonId} onChange={setSourcePersonId} required>
+            <option value="">اختر...</option>
+            {currentPersons.map((p) => (
+              <option key={p.id} value={p.id}>{p.fullName}</option>
+            ))}
+          </Select>
 
-      <Button
-        type="submit"
-        size="sm"
-        className="w-full"
-        disabled={isPending || !sourcePersonId || !targetFamilyId || !targetPersonId}
-      >
-        {isPending ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <GitMerge className="ml-1 h-3.5 w-3.5" />}
-        {labels.submit}
-      </Button>
+          <Select
+            label="العائلة الأخرى"
+            value={targetFamilyId}
+            onChange={(value) => { setTargetFamilyId(value); setTargetPersonId(""); }}
+            required
+          >
+            <option value="">اختر...</option>
+            {targetFamilies.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="الشخص من العائلة الأخرى"
+            value={targetPersonId}
+            onChange={setTargetPersonId}
+            required
+            disabled={!selectedTargetFamily}
+          >
+            <option value="">اختر...</option>
+            {(selectedTargetFamily?.persons ?? []).map((p) => (
+              <option key={p.id} value={p.id}>{p.fullName}</option>
+            ))}
+          </Select>
+
+          <Button
+            type="button"
+            size="sm"
+            className="w-full"
+            disabled={!step1Complete}
+            onClick={() => setStep(2)}
+          >
+            التالي
+            <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      {/* ── Step 2: Relationship ── */}
+      {step === 2 && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            className="text-xs text-accent hover:underline flex items-center gap-1"
+          >
+            <ChevronLeft className="h-3 w-3 rotate-180" />
+            تعديل الاختيار
+          </button>
+
+          <Select
+            label="نوع الرابط"
+            value={relationship}
+            onChange={(v) => setRelationship(v as typeof relationship)}
+            required
+          >
+            <option value="FULL_SIBLINGS">أخوة أشقاء</option>
+            <option value="PATERNAL_SIBLINGS">أخوة من الأب</option>
+            <option value="MATERNAL_SIBLINGS">أخوة من الأم</option>
+          </Select>
+
+          {(relationship === "FULL_SIBLINGS" || relationship === "PATERNAL_SIBLINGS") && (
+            <Field name="sharedFatherName" label="اسم الوالد المشترك (اختياري)" />
+          )}
+          {(relationship === "FULL_SIBLINGS" || relationship === "MATERNAL_SIBLINGS") && (
+            <Field name="sharedMotherName" label="اسم الوالدة المشتركة (اختياري)" />
+          )}
+
+          {/* Collapsible notes */}
+          {!showNotes ? (
+            <button
+              type="button"
+              onClick={() => setShowNotes(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className="h-3 w-3" />
+              إضافة ملاحظة للمراجع
+            </button>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">ملاحظة للمراجعة</label>
+              <textarea
+                name="notes"
+                rows={2}
+                maxLength={1000}
+                title="ملاحظة للمراجعة"
+                placeholder="أي تفاصيل تساعد المراجع على الفهم..."
+                className="w-full rounded-md border border-input bg-background/50 px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              />
+            </div>
+          )}
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {sent && <p className="text-xs text-emerald-400">تم إرسال الطلب</p>}
+
+          <Button
+            type="submit"
+            size="sm"
+            className="w-full"
+            disabled={isPending}
+          >
+            {isPending ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <GitMerge className="ml-1 h-3.5 w-3.5" />}
+            إرسال طلب التوحيد
+          </Button>
+        </div>
+      )}
     </form>
   );
 }
@@ -209,7 +242,7 @@ function Select({
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <select
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         required={required}
         disabled={disabled}
         className="h-8 w-full rounded-md border border-input bg-background/50 px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"

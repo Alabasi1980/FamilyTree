@@ -207,6 +207,7 @@ export function FamilyDetailTabs({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">روابط المشاركة</CardTitle>
+            <p className="text-sm text-muted-foreground">أنشئ روابط مباشرة لمشاركة الشجرة مع أشخاص خارج المنظومة، مع إمكانية تقييد الوصول بكلمة مرور أو تاريخ انتهاء.</p>
           </CardHeader>
           <CardContent>
             <ShareLinkManager familyId={familyId} links={shareLinks} />
@@ -217,6 +218,7 @@ export function FamilyDetailTabs({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">ربط العائلات</CardTitle>
+            <p className="text-sm text-muted-foreground">أنشئ روابط نسب أو مصاهرة بين هذه العائلة وعائلات أخرى لتظهرا معاً في الشبكة العائلية.</p>
           </CardHeader>
           <CardContent>
             <FamilyLinkManager
@@ -232,6 +234,7 @@ export function FamilyDetailTabs({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">توحيد فرعين</CardTitle>
+            <p className="text-sm text-muted-foreground">ادمج فرعاً من عائلة أخرى في هذه الشجرة عبر والد أو جد مشترك، بحيث يظهر الفرعان كسلسلة نسب واحدة.</p>
           </CardHeader>
           <CardContent>
             <BranchUnificationManager
@@ -287,6 +290,7 @@ export function FamilyDetailTabs({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">الزيجات</CardTitle>
+            <p className="text-sm text-muted-foreground">أدر علاقات الزواج بين أفراد العائلة، أو بين فرد من العائلة وشخص من عائلة مرتبطة.</p>
           </CardHeader>
           <CardContent>
             <MarriageManager
@@ -302,6 +306,7 @@ export function FamilyDetailTabs({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">المسؤولون</CardTitle>
+            <p className="text-sm text-muted-foreground">أدر قائمة مسؤولي هذه العائلة وراجع طلبات الانضمام للإدارة من أعضاء آخرين.</p>
           </CardHeader>
           <CardContent>
             <CoAdminManager

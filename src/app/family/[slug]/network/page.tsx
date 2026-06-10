@@ -89,6 +89,26 @@ export default async function FamilyNetworkPage({ params, searchParams }: Props)
                 </p>
               </div>
             </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-5 bg-[hsl(145_40%_38%)] rounded" />
+                <span>نسب أبوي</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-5 border-t-2 border-dashed border-[hsl(338_65%_62%)]" />
+                <span>زواج</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-5 border-t-2 border-dashed border-[hsl(45_90%_55%)]" />
+                <span>مصاهرة</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-5 border-t-2 border-dashed border-[hsl(210_70%_55%)]" />
+                <span>نسب عائلي</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

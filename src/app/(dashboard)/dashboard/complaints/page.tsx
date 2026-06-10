@@ -74,7 +74,19 @@ export default async function ComplaintsPage() {
         </CardHeader>
         <CardContent className="p-0">
           {complaints.length === 0 ? (
-            <p className="px-6 py-6 text-center text-sm text-muted-foreground">لا توجد شكاوى مرسلة</p>
+            <div className="px-6 py-8 text-center space-y-3">
+              <MessageSquare className="h-8 w-8 text-muted-foreground/30 mx-auto" />
+              <p className="text-sm text-muted-foreground">لم ترسل أي شكوى بعد</p>
+              <div className="text-right max-w-xs mx-auto space-y-1.5">
+                <p className="text-[11px] text-muted-foreground/70 font-medium">يمكنك استخدام هذا القسم للإبلاغ عن:</p>
+                <ul className="space-y-1 text-[11px] text-muted-foreground/60">
+                  <li className="flex items-center gap-1.5"><span className="text-accent/60">•</span> مشكلة في الوصول إلى حسابك</li>
+                  <li className="flex items-center gap-1.5"><span className="text-accent/60">•</span> بيانات خاطئة تحتاج تصحيحًا من المدير</li>
+                  <li className="flex items-center gap-1.5"><span className="text-accent/60">•</span> طلب ربط عائلتين أو توحيد فروع</li>
+                  <li className="flex items-center gap-1.5"><span className="text-accent/60">•</span> أي مشكلة تقنية أو خصوصية</li>
+                </ul>
+              </div>
+            </div>
           ) : (
             <ul className="divide-y divide-border/40">
               {complaints.map((complaint) => (

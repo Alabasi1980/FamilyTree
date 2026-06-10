@@ -41,12 +41,28 @@ export default async function FamiliesListPage() {
       </div>
 
       {families.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <TreePine className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>لا توجد عائلات بعد</p>
-          <Button variant="outline" size="sm" className="mt-4" asChild>
+        <div className="rounded-xl border border-border/40 bg-card/30 py-16 px-6 text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="flex items-end gap-1 text-muted-foreground/20">
+              <TreePine className="h-7 w-7" />
+              <TreePine className="h-11 w-11" />
+              <TreePine className="h-7 w-7" />
+            </div>
+          </div>
+          <div className="space-y-1.5 max-w-xs mx-auto">
+            <p className="font-semibold text-foreground">
+              {isSystemAdmin ? "لا توجد عائلات بعد" : "لا تدير أي عائلة بعد"}
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {isSystemAdmin
+                ? "يمكنك إنشاء أول عائلة مباشرة وستكون متاحة للإدارة فوراً."
+                : "يمكنك تقديم طلب إنشاء عائلة جديدة أو طلب الانضمام كمسؤول لعائلة قائمة من صفحتها العامة."}
+            </p>
+          </div>
+          <Button variant="gold" size="sm" asChild>
             <Link href="/dashboard/families/new">
-              {isSystemAdmin ? "أنشئ أول عائلة" : "اطلب إضافة عائلة"}
+              <Plus className="h-4 w-4 ml-1" />
+              {isSystemAdmin ? "أنشئ أول عائلة" : "اطلب إضافة عائلة جديدة"}
             </Link>
           </Button>
         </div>

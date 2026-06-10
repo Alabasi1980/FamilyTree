@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Globe, MapPin, Building2, Plus, Pencil, Trash2,
-  Check, X, ChevronDown, ChevronRight, Loader2, Users,
+  Check, X, ChevronDown, ChevronRight, Loader2, Users, Search,
 } from "lucide-react";
 import { createHomelandPlace, updateHomelandPlace, deleteHomelandPlace } from "@/lib/actions/homelands";
 import { Input } from "@/components/ui/input";
@@ -242,13 +242,30 @@ export function HomelandsManager({ places }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingUnder, setAddingUnder] = useState<{ parentId: string | null; type: "COUNTRY" | "REGION" | "CITY" } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
   const byParent = new Map<string | null, PlaceData[]>();
   for (const place of places) {
     const key = place.parentId ?? null;
     byParent.set(key, [...(byParent.get(key) ?? []), place]);
   }
-  const countries = byParent.get(null) ?? [];
+  const allCountries = byParent.get(null) ?? [];
+
+  const q = search.trim().toLowerCase();
+  const matches = (name: string, aliases: string[]) =>
+    !q || name.toLowerCase().includes(q) || aliases.some((a) => a.toLowerCase().includes(q));
+
+  const countries = q
+    ? allCountries.filter((c) => {
+        if (matches(c.name, c.aliases)) return true;
+        const regions = byParent.get(c.id) ?? [];
+        return regions.some((r) => {
+          if (matches(r.name, r.aliases)) return true;
+          const cities = byParent.get(r.id) ?? [];
+          return cities.some((city) => matches(city.name, city.aliases));
+        });
+      })
+    : allCountries;
 
   function toggleCollapse(id: string) {
     setCollapsed((prev) => {
@@ -264,10 +281,29 @@ export function HomelandsManager({ places }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Add country button */}
+      {/* Search + Add country */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث عن دولة أو منطقة أو مدينة..."
+            className="h-8 w-full rounded-md border border-border/60 bg-card/60 pr-8 pl-3 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        {search && (
+          <button type="button" onClick={() => setSearch("")} title="مسح البحث"
+            className="text-[10px] text-muted-foreground hover:text-foreground shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {countries.length === 0 ? "لم تتم إضافة أي مواطن بعد." : `${countries.length} دولة`}
+          {countries.length === 0 && q ? "لا نتائج مطابقة للبحث" : countries.length === 0 ? "لم تتم إضافة أي مواطن بعد." : `${countries.length} دولة`}
         </p>
         {!isAddingUnder(null, "COUNTRY") && (
           <button type="button"
@@ -287,7 +323,7 @@ export function HomelandsManager({ places }: Props) {
       <div className="space-y-2">
         {countries.map((country) => {
           const regions = byParent.get(country.id) ?? [];
-          const isCollapsed = collapsed.has(country.id);
+          const isCollapsed = q ? false : collapsed.has(country.id);
           const CountryIcon = typeIcon.COUNTRY;
 
           return (

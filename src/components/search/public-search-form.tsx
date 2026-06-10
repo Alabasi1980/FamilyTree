@@ -25,26 +25,34 @@ export function PublicSearchForm({
     <form
       action={withBasePath("/search")}
       method="get"
-      className={cn("relative w-full", className)}
+      className={cn("flex w-full items-center gap-2", className)}
       role="search"
     >
-      <Search
+      <div className="relative flex-1">
+        <Search
+          className={cn(
+            "absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none",
+            isLarge ? "h-5 w-5 right-4" : "h-4 w-4"
+          )}
+        />
+        <input
+          name="q"
+          type="search"
+          defaultValue={query}
+          placeholder={labels.placeholder}
+          className={cn(
+            "w-full rounded-md border border-input bg-muted/40 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring",
+            isLarge ? "h-12 rounded-lg pr-12 pl-4 text-base" : "h-8 pr-9 pl-3"
+          )}
+        />
+      </div>
+      <button
+        type="submit"
         className={cn(
-          "absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground",
-          isLarge ? "h-5 w-5 right-4" : "h-4 w-4"
+          "shrink-0 rounded-md bg-primary font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+          isLarge ? "h-12 px-6 text-base" : "h-8 px-4 text-sm"
         )}
-      />
-      <input
-        name="q"
-        type="search"
-        defaultValue={query}
-        placeholder={labels.placeholder}
-        className={cn(
-          "w-full rounded-md border border-input bg-muted/40 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring",
-          isLarge ? "h-12 rounded-lg pr-12 pl-4 text-base" : "h-8 pr-9 pl-3"
-        )}
-      />
-      <button type="submit" className="sr-only">
+      >
         {labels.submit}
       </button>
     </form>

@@ -24,25 +24,29 @@ export default function NewFamilyPage() {
     const form = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const result = await createFamilyRequest({
-        name: form.get("name") as string,
-        originSummary: form.get("originSummary") as string,
-        historicalNotes: form.get("historicalNotes") as string,
-        homelandCountry: form.get("homelandCountry") as string,
-        homelandRegion: form.get("homelandRegion") as string,
-        homelandCity: form.get("homelandCity") as string,
-        homelandNote: form.get("homelandNote") as string,
-        homelandConfidence: (form.get("homelandConfidence") as string || "UNSPECIFIED") as
-          | "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED",
-        homelandPlaceId: form.get("homelandPlaceId") as string,
-      });
+      try {
+        const result = await createFamilyRequest({
+          name: form.get("name") as string,
+          originSummary: form.get("originSummary") as string,
+          historicalNotes: form.get("historicalNotes") as string,
+          homelandCountry: form.get("homelandCountry") as string,
+          homelandRegion: form.get("homelandRegion") as string,
+          homelandCity: form.get("homelandCity") as string,
+          homelandNote: form.get("homelandNote") as string,
+          homelandConfidence: (form.get("homelandConfidence") as string || "UNSPECIFIED") as
+            | "VERIFIED" | "LIKELY" | "UNDOCUMENTED" | "UNSPECIFIED",
+          homelandPlaceId: form.get("homelandPlaceId") as string,
+        });
 
-      if (!result.success) {
-        setError(result.error);
-        return;
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+
+        setSuccessResult({ familyId: result.familyId });
+      } catch {
+        setError("حدث خطأ غير متوقع أثناء الإرسال. يرجى المحاولة مرة أخرى.");
       }
-
-      setSuccessResult({ familyId: result.familyId });
     });
   }
 

@@ -286,6 +286,7 @@ export function PersonSidebar({
   const [addingSpouse, setAddingSpouse] = useState(false);
   const [selectedSpouseId, setSelectedSpouseId] = useState("");
   const [error, setError] = useState("");
+  const [newPersonId, setNewPersonId] = useState<string | null>(null);
 
   // ── Computed relatives ──────────────────────────────────────────────────────
   const parents = relations
@@ -363,7 +364,7 @@ export function PersonSidebar({
 
   async function handleAddChild(fullName: string, gender: "MALE" | "FEMALE") {
     const r = await createPersonAsChildOf(person.id, { fullName, gender });
-    if (r.success) { setAddingChild(false); refresh(); }
+    if (r.success) { setAddingChild(false); setNewPersonId(r.personId); refresh(); }
     else setError(r.error ?? "حدث خطأ");
   }
 
@@ -375,7 +376,7 @@ export function PersonSidebar({
 
   async function handleAddParent(fullName: string, gender: "MALE" | "FEMALE") {
     const r = await createPersonAsParentOf(person.id, { fullName, gender });
-    if (r.success) { setAddingParent(false); refresh(); }
+    if (r.success) { setAddingParent(false); setNewPersonId(r.personId); refresh(); }
     else setError(r.error ?? "حدث خطأ");
   }
 
@@ -472,6 +473,20 @@ export function PersonSidebar({
             <button onClick={() => setError("")} aria-label="إغلاق الخطأ" className="shrink-0 hover:text-destructive/70">
               <X className="h-3 w-3" />
             </button>
+          </div>
+        )}
+
+        {/* New person quick-access link */}
+        {newPersonId && canManage && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-2.5 py-1.5 text-xs text-green-600">
+            <span>تمت الإضافة بنجاح</span>
+            <Link
+              href={`/dashboard/families/${familyId}/persons/${newPersonId}/edit`}
+              className="shrink-0 font-medium underline underline-offset-2 hover:text-green-500"
+              onClick={() => setNewPersonId(null)}
+            >
+              فتح التفاصيل الكاملة ←
+            </Link>
           </div>
         )}
 

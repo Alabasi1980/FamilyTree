@@ -2,8 +2,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { TreePine, Users, ClipboardList, Plus, MapPin, ArrowLeft, Sprout, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { formatFamilyHomeland, getFamilyHomelandKey } from "@/lib/family-homeland";
+import { WelcomeBanner } from "@/components/dashboard/welcome-banner";
 
 async function getDashboardData(userId: string, isAdmin: boolean) {
   const familyWhere = isAdmin
@@ -104,6 +106,11 @@ export default async function DashboardPage() {
           </Link>
         </Button>
       </div>
+
+      {/* ── Welcome banner — يظهر مرة واحدة بعد التسجيل ── */}
+      <Suspense>
+        <WelcomeBanner userName={firstName} />
+      </Suspense>
 
       {/* ── Onboarding — تظهر فقط للمستخدم الجديد الذي لا يدير عائلات بعد ── */}
       {!isSystemAdmin && managedFamiliesCount === 0 && (

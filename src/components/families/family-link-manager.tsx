@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { proposeFamilyLink, deleteFamilyLink } from "@/lib/actions/family-links";
@@ -50,7 +50,13 @@ export default function FamilyLinkManager({
   const [linkType, setLinkType] = useState<"KINSHIP" | "IN_LAW">("KINSHIP");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  const showSuccess = useCallback((msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(""), 4000);
+  }, []);
 
   const approvedLinks = links.filter((l) => l.status === "APPROVED");
   const pendingLinks = links.filter((l) => l.status === "PENDING");
@@ -88,6 +94,11 @@ export default function FamilyLinkManager({
       setTargetFamilyId("");
       setDescription("");
       setShowForm(false);
+      showSuccess(
+        status === "APPROVED"
+          ? `تم ربط عائلة ${targetFamily.name} بنجاح`
+          : `تم إرسال اقتراح الربط مع عائلة ${targetFamily.name} — في انتظار الموافقة`
+      );
     });
   }
 
@@ -100,8 +111,16 @@ export default function FamilyLinkManager({
 
   return (
     <div className="space-y-4">
+      {/* Success message */}
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-600">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {successMsg}
+        </div>
+      )}
+
       {/* Approved links */}
-      {approvedLinks.length === 0 && pendingLinks.length === 0 && (
+      {approvedLinks.length === 0 && pendingLinks.length === 0 && !successMsg && (
         <p className="text-sm text-muted-foreground">لا توجد روابط مع عائلات أخرى.</p>
       )}
 

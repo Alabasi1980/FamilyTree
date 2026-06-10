@@ -117,6 +117,21 @@ export async function createFamilyRequest(data: {
     return { success: true, familyId: family.id };
   }
 
+  const existingPending = await db.adminRequest.findFirst({
+    where: {
+      submittedByUserId: session.user.id,
+      requestType: "CREATE_FAMILY_AND_ADMINISTER",
+      status: "PENDING",
+    },
+    select: { id: true },
+  });
+  if (existingPending) {
+    return {
+      success: false,
+      error: "لديك طلب إنشاء عائلة قيد المراجعة بالفعل. يرجى انتظار البت فيه قبل تقديم طلب جديد.",
+    };
+  }
+
   const request = await db.adminRequest.create({
     data: {
       requestType: "CREATE_FAMILY_AND_ADMINISTER",
@@ -137,6 +152,15 @@ export async function createFamilyRequest(data: {
     type: "REQUEST_SUBMITTED",
     title: "طلب إنشاء عائلة جديد",
     body: `طلب إنشاء عائلة ${familyData.name} ينتظر مراجعة مدير النظام.`,
+    href: requestFocusHref(request.id),
+    metadata: { requestId: request.id, requestType: "CREATE_FAMILY_AND_ADMINISTER" },
+  });
+
+  // تنبيه تأكيد للمستخدم نفسه بأن طلبه وصل
+  await createNotifications([session.user.id], {
+    type: "REQUEST_SUBMITTED",
+    title: "تم إرسال طلبك بنجاح",
+    body: `طلب إنشاء عائلة ${familyData.name} قيد المراجعة من مدير النظام. ستصلك إشعاراً عند اتخاذ القرار.`,
     href: requestFocusHref(request.id),
     metadata: { requestId: request.id, requestType: "CREATE_FAMILY_AND_ADMINISTER" },
   });
