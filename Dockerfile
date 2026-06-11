@@ -16,7 +16,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 RUN npx prisma generate
-RUN npx prisma migrate deploy || true
 RUN npm run build
 
 FROM base AS runner
@@ -30,14 +29,26 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# ملفات Next.js standalone
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Prisma: schema + config + client المولّد
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 
+# node_modules الكاملة من deps (تحتوي prisma CLI + كل deps مثل effect وdotenv)
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# سكربت الإقلاع: db push ثم تشغيل التطبيق
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
+USER root
+RUN chmod +x ./docker-entrypoint.sh
 USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
