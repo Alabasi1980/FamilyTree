@@ -320,15 +320,15 @@ export function FamilyTree({
   }, []);
 
   // ── node selection ───────────────────────────────────────────────────────
-  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null);
+  const initialSelectedPerson = useMemo(
+    () =>
+      defaultSelectedPersonId
+        ? [...persons, ...linkedPersons].find((p) => p.id === defaultSelectedPersonId) ?? null
+        : null,
+    [defaultSelectedPersonId, persons, linkedPersons]
+  );
+  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(initialSelectedPerson);
   const [showAddPanel, setShowAddPanel] = useState(false);
-
-  // auto-select person from ?person= query param (e.g. from search results)
-  useEffect(() => {
-    if (!defaultSelectedPersonId) return;
-    const target = [...persons, ...linkedPersons].find((p) => p.id === defaultSelectedPersonId);
-    if (target) setSelectedPerson(target);
-  }, [defaultSelectedPersonId, persons, linkedPersons]);
 
   const handleSearchSelect = useCallback((personId: string) => {
     const pos = positions.get(personId);

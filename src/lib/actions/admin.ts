@@ -192,6 +192,9 @@ export async function removeCoAdmin(
     select: { userId: true, familyId: true, isActive: true },
   });
   if (!assignment || !assignment.isActive) return { success: false, error: "التعيين غير موجود" };
+  if (assignment.familyId !== familyId) {
+    return { success: false, error: "التعيين لا يتبع هذه العائلة" };
+  }
   if (assignment.userId === session.user.id) {
     // Check if last admin
     const count = await db.familyAdminAssignment.count({

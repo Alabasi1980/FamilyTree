@@ -202,7 +202,7 @@ export default async function FamilyPublicPage({ params, searchParams }: Props) 
           where: {
             familyId: { in: inLawFamilyIds },
             deletedAt: null,
-            visibilityLevel: { in: ["PUBLIC", "MEMBER"] },
+            visibilityLevel: { in: allowedVisibilities as ("PUBLIC" | "MEMBER" | "ADMIN" | "SHARED_LINK")[] },
           },
           select: {
             id: true,

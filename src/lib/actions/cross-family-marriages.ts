@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { validateMarriageEligibility } from "@/lib/domain/family-rules/marriage-eligibility";
 
 export type CrossFamilyResult = { success: true } | { success: false; error: string };
 
@@ -60,12 +61,19 @@ export async function submitCrossMarriageRequest(
     return { success: false, error: "لا تملك صلاحية التعديل في أي من العائلتين" };
   }
 
+  const validation = await validateMarriageEligibility(personAId, personBId, {
+    allowCrossFamily: true,
+    marriageDate: options?.marriageDate ?? null,
+  });
+  if (!validation.success) return validation;
+
   // Prevent duplicate PENDING/APPROVED requests for the same pair
-  const [normalizedA, normalizedB] = [personAId, personBId].sort();
   const existing = await db.crossFamilyMarriageRequest.findFirst({
     where: {
-      personAId: normalizedA,
-      personBId: normalizedB,
+      OR: [
+        { personAId, personBId },
+        { personAId: personBId, personBId: personAId },
+      ],
       status: { in: ["PENDING_FAMILY_A", "PENDING_FAMILY_B", "APPROVED"] },
     },
   });
@@ -73,23 +81,20 @@ export async function submitCrossMarriageRequest(
     return { success: false, error: "يوجد طلب زواج معلّق لهذين الشخصين بالفعل" };
   }
 
-  // Determine initial status based on which side the submitter manages
-  // If submitter manages Family A → Family A auto-approved, waiting on Family B
-  // If submitter manages Family B → Family B auto-approved, waiting on Family A
-  const submitterManagesA = canManageA;
   const now = new Date();
+  const requestPersonA = canManageA ? personA : personB;
+  const requestPersonB = canManageA ? personB : personA;
 
-  // Normalize: familyAId is always the submitter's family for consistency
-  const [familyAId, familyBId, pAId, pBId] = submitterManagesA
-    ? [personA.familyId, personB.familyId, normalizedA, normalizedB]
-    : [personB.familyId, personA.familyId, normalizedA, normalizedB];
+  // familyA/personA is the submitting side. This keeps the request sides aligned.
+  const familyAId = requestPersonA.familyId;
+  const familyBId = requestPersonB.familyId;
 
   await db.crossFamilyMarriageRequest.create({
     data: {
       familyAId,
       familyBId,
-      personAId: pAId,
-      personBId: pBId,
+      personAId: requestPersonA.id,
+      personBId: requestPersonB.id,
       status: "PENDING_FAMILY_B",
       marriageDate: options?.marriageDate ? new Date(options.marriageDate) : null,
       notes: options?.notes ?? null,
@@ -214,28 +219,25 @@ export async function applyCrossMarriageRequest(
     return { success: false, error: "أحد الأشخاص لم يعد موجوداً" };
   }
 
-  // Check no active marriage already exists between the pair
-  const [nA, nB] = [request.personAId, request.personBId].sort();
-  const existingActive = await db.marriageRelation.findFirst({
-    where: {
-      personAId: nA,
-      personBId: nB,
-      status: "ACTIVE",
-      deletedAt: null,
-    },
-  });
-  if (existingActive) {
-    return { success: false, error: "يوجد زواج نشط مسبقاً بين هذين الشخصين" };
+  if (personA.familyId !== request.familyAId || personB.familyId !== request.familyBId) {
+    return { success: false, error: "بيانات الطلب غير متطابقة مع عائلات الأشخاص" };
   }
+
+  const validation = await validateMarriageEligibility(request.personAId, request.personBId, {
+    allowCrossFamily: true,
+    marriageDate: request.marriageDate,
+  });
+  if (!validation.success) return validation;
 
   const now = new Date();
   await db.$transaction(async (tx) => {
     const created = await tx.marriageRelation.create({
       data: {
-        personAId: nA,
-        personBId: nB,
+        personAId: validation.normalizedA,
+        personBId: validation.normalizedB,
         marriageDate: request.marriageDate,
         notes: request.notes,
+        status: validation.initialStatus,
         crossFamilyRequestId: requestId,
       },
     });

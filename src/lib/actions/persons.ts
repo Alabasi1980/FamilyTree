@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createNotifications, getActiveFamilyAdminUserIds, getSystemAdminUserIds, requestFocusHref } from "@/lib/notifications";
+import type { ParentChildRelationType, RelationConfidence } from "@/generated/prisma/client";
 
 const currentYear = new Date().getFullYear();
 
@@ -146,14 +147,27 @@ export async function recomputeFamilyAncestry(familyId: string) {
   ]);
 }
 
-async function wouldCreateCycle(parentId: string, childId: string, familyId: string) {
+async function wouldCreateCycle(parentId: string, childId: string, familyIds: string[]) {
   if (parentId === childId) return true;
 
-  const familyPersons = await db.person.findMany({
-    where: { familyId, deletedAt: null },
-    select: { id: true },
-  });
-  const familyPersonIds = familyPersons.map((p) => p.id);
+  const [familyPersons, secondaryMemberships] = await Promise.all([
+    db.person.findMany({
+      where: { familyId: { in: familyIds }, deletedAt: null },
+      select: { id: true },
+    }),
+    db.personFamilyMembership.findMany({
+      where: { familyId: { in: familyIds } },
+      select: { personId: true },
+    }),
+  ]);
+  const familyPersonIds = [
+    ...new Set([
+      parentId,
+      childId,
+      ...familyPersons.map((p) => p.id),
+      ...secondaryMemberships.map((m) => m.personId),
+    ]),
+  ];
 
   const relations = await db.parentChildRelation.findMany({
     where: {
@@ -327,7 +341,11 @@ export async function createPerson(rawData: unknown): Promise<PersonActionResult
 
 export async function addParentChildRelation(
   parentId: string,
-  childId: string
+  childId: string,
+  options?: {
+    relationType?: ParentChildRelationType;
+    confidence?: RelationConfidence;
+  }
 ): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
@@ -341,19 +359,23 @@ export async function addParentChildRelation(
   }
 
   const isCrossFamily = parent.familyId !== child.familyId;
+  const relationType = options?.relationType ?? "BIOLOGICAL";
+  const confidence = options?.confidence ?? "VERIFIED";
 
-  const parentSlotError = await validateParentSlot(parentId, childId);
-  if (parentSlotError) return { success: false, error: parentSlotError };
+  if (relationType === "BIOLOGICAL") {
+    const parentSlotError = await validateParentSlot(parentId, childId);
+    if (parentSlotError) return { success: false, error: parentSlotError };
 
-  // Chronology: parent must not be younger than child
-  const { validateParentChildChronology } = await import("@/lib/domain/family-rules/chronology-validators");
-  const parentChronoResult = await validateParentChildChronology(parentId, childId, db);
-  if (parentChronoResult.status === "PROHIBITED") {
-    return { success: false, error: parentChronoResult.message };
-  }
+    // Chronology: biological parent must not be younger than child.
+    const { validateParentChildChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+    const parentChronoResult = await validateParentChildChronology(parentId, childId, db);
+    if (parentChronoResult.status === "PROHIBITED") {
+      return { success: false, error: parentChronoResult.message };
+    }
 
-  if (await wouldCreateCycle(parentId, childId, child.familyId)) {
-    return { success: false, error: "هذه العلاقة ستنشئ دورة غير صحيحة في النسب" };
+    if (await wouldCreateCycle(parentId, childId, [...new Set([parent.familyId, child.familyId])])) {
+      return { success: false, error: "هذه العلاقة ستنشئ دورة غير صحيحة في النسب" };
+    }
   }
 
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
@@ -379,8 +401,8 @@ export async function addParentChildRelation(
   // Create parent-child relation
   await db.parentChildRelation.upsert({
     where: { parentPersonId_childPersonId: { parentPersonId: parentId, childPersonId: childId } },
-    create: { parentPersonId: parentId, childPersonId: childId },
-    update: {},
+    create: { parentPersonId: parentId, childPersonId: childId, relationType, confidence },
+    update: { relationType, confidence },
   });
 
   // For cross-family links: add secondary memberships so both persons
@@ -567,7 +589,13 @@ export async function deletePerson(personId: string): Promise<{ success: boolean
 
 export async function createPersonAsChildOf(
   parentPersonId: string,
-  newPersonData: { fullName: string; gender: "MALE" | "FEMALE"; isLiving?: boolean }
+  newPersonData: {
+    fullName: string;
+    gender: "MALE" | "FEMALE";
+    isLiving?: boolean;
+    relationType?: ParentChildRelationType;
+    confidence?: RelationConfidence;
+  }
 ): Promise<PersonActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
@@ -582,6 +610,8 @@ export async function createPersonAsChildOf(
     return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
+  const relationType = newPersonData.relationType ?? "BIOLOGICAL";
+  const confidence = newPersonData.confidence ?? "VERIFIED";
   const childIsLiving = newPersonData.isLiving ?? true;
 
   let childId: string;
@@ -597,7 +627,7 @@ export async function createPersonAsChildOf(
         },
       });
       await tx.parentChildRelation.create({
-        data: { parentPersonId, childPersonId: child.id },
+        data: { parentPersonId, childPersonId: child.id, relationType, confidence },
       });
       return child.id;
     });
@@ -614,7 +644,13 @@ export async function createPersonAsChildOf(
 
 export async function createPersonAsParentOf(
   childPersonId: string,
-  newPersonData: { fullName: string; gender: "MALE" | "FEMALE"; isLiving?: boolean }
+  newPersonData: {
+    fullName: string;
+    gender: "MALE" | "FEMALE";
+    isLiving?: boolean;
+    relationType?: ParentChildRelationType;
+    confidence?: RelationConfidence;
+  }
 ): Promise<PersonActionResult> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "غير مصرح" };
@@ -629,8 +665,12 @@ export async function createPersonAsParentOf(
     return { success: false, error: "لا تملك صلاحية الإضافة" };
   }
 
-  const parentSlotError = await validateNewParentSlot(childPersonId, newPersonData.gender);
-  if (parentSlotError) return { success: false, error: parentSlotError };
+  const relationType = newPersonData.relationType ?? "BIOLOGICAL";
+  const confidence = newPersonData.confidence ?? "VERIFIED";
+  if (relationType === "BIOLOGICAL") {
+    const parentSlotError = await validateNewParentSlot(childPersonId, newPersonData.gender);
+    if (parentSlotError) return { success: false, error: parentSlotError };
+  }
 
   // Parents added in quick-add are typically historical figures — default to deceased
   const parentIsLiving = newPersonData.isLiving ?? false;
@@ -648,7 +688,7 @@ export async function createPersonAsParentOf(
         },
       });
       await tx.parentChildRelation.create({
-        data: { parentPersonId: parent.id, childPersonId },
+        data: { parentPersonId: parent.id, childPersonId, relationType, confidence },
       });
       return parent.id;
     });
@@ -755,12 +795,20 @@ export async function removeParentChildRelation(
   if (!parent || parent.deletedAt || child.deletedAt) {
     return { success: false, error: "الشخص غير موجود" };
   }
-  if (parent.familyId !== child.familyId) {
-    return { success: false, error: "لا يمكن تعديل علاقة والد/ابن بين عائلتين مختلفتين" };
-  }
-
   const isAdmin = session.user.accountType === "SYSTEM_ADMIN";
-  if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
+  const isCrossFamily = parent.familyId !== child.familyId;
+  if (isCrossFamily) {
+    const [canManageParentFamily, canManageChildFamily] = await Promise.all([
+      canManageFamily(session.user.id, parent.familyId, isAdmin),
+      canManageFamily(session.user.id, child.familyId, isAdmin),
+    ]);
+    if (!canManageParentFamily || !canManageChildFamily) {
+      return {
+        success: false,
+        error: "حذف علاقة والد/ابن بين عائلتين يتطلب صلاحية إدارة كلتا العائلتين",
+      };
+    }
+  } else if (!(await canManageFamily(session.user.id, child.familyId, isAdmin))) {
     return { success: false, error: "لا تملك صلاحية التعديل" };
   }
 
@@ -768,9 +816,12 @@ export async function removeParentChildRelation(
     where: { parentPersonId: parentId, childPersonId: childId },
   });
 
-  await recomputeFamilyAncestry(child.familyId);
+  const affectedFamilyIds = [...new Set([parent.familyId, child.familyId])];
+  await Promise.all(affectedFamilyIds.map((familyId) => recomputeFamilyAncestry(familyId)));
 
-  revalidatePath(`/dashboard/families/${child.familyId}`);
-  revalidatePath(`/family/${child.familyId}`);
+  for (const familyId of affectedFamilyIds) {
+    revalidatePath(`/dashboard/families/${familyId}`);
+    revalidatePath(`/family/${familyId}`);
+  }
   return { success: true };
 }

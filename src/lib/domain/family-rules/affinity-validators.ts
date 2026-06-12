@@ -83,7 +83,7 @@ export async function validateAffinityMahram(
 
   // ── Rule 2: زوجة الابن (daughter-in-law) ──────────────────────────────────
   // Female must NOT be a wife (past or present) of any biological son of the male
-  const sonIds = (await getBiologicalChildIds(maleId, db)).filter(async (_) => true); // all children
+  const sonIds = await getBiologicalChildIds(maleId, db);
   // Filter to male children only
   if (sonIds.length > 0) {
     const children = await db.person.findMany({

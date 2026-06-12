@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight, ChevronUp, ChevronDown, Plus, Heart, Loader2,
-  Sparkles, Undo2, Network, User, X, Check,
+  Sparkles, Undo2, Network, X, Check,
 } from "lucide-react";
 import {
   createPerson,

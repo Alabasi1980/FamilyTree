@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X, UserPlus, Edit3, ChevronDown, ChevronUp, Loader2, CheckCircle2, MessageSquarePlus } from "lucide-react";
+import { X, UserPlus, Edit3, ChevronUp, Loader2, CheckCircle2, MessageSquarePlus } from "lucide-react";
 import { submitGuestSuggestion } from "@/lib/actions/guest-suggestions";
 
 interface Person {

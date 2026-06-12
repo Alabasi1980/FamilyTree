@@ -156,7 +156,6 @@ export function FamilyDetailTabs({
   admins,
   pendingJoinRequests,
   crossFamilyMembers,
-  userId,
 }: Props) {
   const personOptions = orderedPersons.map((p) => ({ id: p.id, fullName: p.fullName }));
 

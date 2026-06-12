@@ -38,12 +38,6 @@ const childTypeLabel = {
   CITY: "",
 };
 
-const childType = {
-  COUNTRY: "REGION" as const,
-  REGION: "CITY" as const,
-  CITY: null,
-};
-
 interface AddFormProps {
   parentId: string | null;
   type: "COUNTRY" | "REGION" | "CITY";
@@ -224,7 +218,9 @@ function PlaceRowActions({ place, onEdit }: PlaceRowActionsProps) {
         <Pencil className="h-3.5 w-3.5" />
       </button>
       <button type="button"
-        onClick={() => canDelete ? setConfirmDelete(true) : null}
+        onClick={() => {
+          if (canDelete) setConfirmDelete(true);
+        }}
         disabled={!canDelete}
         title={!canDelete ? (place.familyCount > 0 ? `مرتبط بـ ${place.familyCount} عائلة` : "يحتوي على مواطن فرعية") : "حذف"}
         className="rounded p-1 text-muted-foreground/60 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
@@ -270,7 +266,11 @@ export function HomelandsManager({ places }: Props) {
   function toggleCollapse(id: string) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }

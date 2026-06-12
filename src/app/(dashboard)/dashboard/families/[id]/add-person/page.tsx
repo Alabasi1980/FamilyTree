@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import DuplicateWarning from "@/components/persons/duplicate-warning";
 import { createPerson } from "@/lib/actions/persons";
-import { withBasePath } from "@/lib/base-path";
 
 type Gender = "MALE" | "FEMALE";
 type VisibilityValue = "PUBLIC" | "MEMBER" | "ADMIN";

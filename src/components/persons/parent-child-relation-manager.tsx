@@ -13,6 +13,7 @@ import {
   createPersonAsChildOf,
   createPersonAsParentOf,
 } from "@/lib/actions/persons";
+import type { ParentChildRelationType, RelationConfidence } from "@/generated/prisma/client";
 
 interface RelatedPerson {
   id: string;
@@ -27,6 +28,19 @@ interface PersonOption {
 }
 
 type AddMode = "existing" | "new" | null;
+const relationTypes: Array<{ value: ParentChildRelationType; label: string }> = [
+  { value: "BIOLOGICAL", label: "بيولوجية" },
+  { value: "STEP", label: "زوج/زوجة والد" },
+  { value: "GUARDIANSHIP", label: "وصاية" },
+  { value: "ADOPTIVE", label: "تبنٍ/رعاية" },
+  { value: "UNKNOWN", label: "غير معروف" },
+];
+const confidenceLevels: Array<{ value: RelationConfidence; label: string }> = [
+  { value: "VERIFIED", label: "موثقة" },
+  { value: "LIKELY", label: "مرجحة" },
+  { value: "UNVERIFIED", label: "غير موثقة" },
+  { value: "DISPUTED", label: "متنازع عليها" },
+];
 
 interface SectionProps {
   title: string;
@@ -46,6 +60,8 @@ function RelationSection({
   const [sectionPending, startSectionTransition] = useTransition();
   const [addMode, setAddMode] = useState<AddMode>(null);
   const [selectedId, setSelectedId] = useState("");
+  const [relationType, setRelationType] = useState<ParentChildRelationType>("BIOLOGICAL");
+  const [confidence, setConfidence] = useState<RelationConfidence>("VERIFIED");
   const [newName, setNewName] = useState("");
   const [newGender, setNewGender] = useState<"MALE" | "FEMALE">("MALE");
   const [error, setError] = useState("");
@@ -66,6 +82,8 @@ function RelationSection({
   function reset() {
     setAddMode(null);
     setSelectedId("");
+    setRelationType("BIOLOGICAL");
+    setConfidence("VERIFIED");
     setNewName("");
     setNewGender("MALE");
     setError("");
@@ -78,8 +96,8 @@ function RelationSection({
     startSectionTransition(async () => {
       const result =
         role === "parent"
-          ? await addParentChildRelation(selectedId, currentPersonId)
-          : await addParentChildRelation(currentPersonId, selectedId);
+          ? await addParentChildRelation(selectedId, currentPersonId, { relationType, confidence })
+          : await addParentChildRelation(currentPersonId, selectedId, { relationType, confidence });
 
       if (!result.success) {
         setError(result.error ?? "حدث خطأ");
@@ -102,8 +120,8 @@ function RelationSection({
     startSectionTransition(async () => {
       const result =
         role === "parent"
-          ? await createPersonAsParentOf(currentPersonId, { fullName: nameToShow, gender: newGender })
-          : await createPersonAsChildOf(currentPersonId, { fullName: nameToShow, gender: newGender });
+          ? await createPersonAsParentOf(currentPersonId, { fullName: nameToShow, gender: newGender, relationType, confidence })
+          : await createPersonAsChildOf(currentPersonId, { fullName: nameToShow, gender: newGender, relationType, confidence });
 
       if (!result.success) {
         setError(result.error ?? "حدث خطأ");
@@ -217,6 +235,38 @@ function RelationSection({
                 placeholder={`— اختر ${title.slice(0, -1) === "الوالدا" ? "الوالد/الوالدة" : "الابن/البنت"} —`}
                 disabled={isWorking}
               />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-[11px] text-muted-foreground">نوع العلاقة</span>
+                  <select
+                    value={relationType}
+                    onChange={(e) => setRelationType(e.target.value as ParentChildRelationType)}
+                    disabled={isWorking}
+                    className="h-8 w-full rounded-md border border-input bg-card/60 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {relationTypes.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[11px] text-muted-foreground">درجة الثقة</span>
+                  <select
+                    value={confidence}
+                    onChange={(e) => setConfidence(e.target.value as RelationConfidence)}
+                    disabled={isWorking}
+                    className="h-8 w-full rounded-md border border-input bg-card/60 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {confidenceLevels.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">
                 <Button
@@ -268,6 +318,38 @@ function RelationSection({
                     {g === "MALE" ? "ذكر" : "أنثى"}
                   </button>
                 ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-[11px] text-muted-foreground">نوع العلاقة</span>
+                  <select
+                    value={relationType}
+                    onChange={(e) => setRelationType(e.target.value as ParentChildRelationType)}
+                    disabled={isWorking}
+                    className="h-8 w-full rounded-md border border-input bg-card/60 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {relationTypes.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[11px] text-muted-foreground">درجة الثقة</span>
+                  <select
+                    value={confidence}
+                    onChange={(e) => setConfidence(e.target.value as RelationConfidence)}
+                    disabled={isWorking}
+                    className="h-8 w-full rounded-md border border-input bg-card/60 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {confidenceLevels.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">

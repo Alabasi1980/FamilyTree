@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { useState } from "react";
 import {
   TreePine, LayoutDashboard, Users, ClipboardList,
   Settings, LogOut, Shield, Menu, X, Globe, Bell, AlertTriangle, MapPinned, ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { withBasePath } from "@/lib/base-path";
 import type { AccountType } from "@/generated/prisma/client";
 
 interface SidebarUser {

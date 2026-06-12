@@ -20,8 +20,10 @@ export function DashboardAlerts({ emailVerified, hasPhone, linkedPersonId, isGoo
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (localStorage.getItem("bastan_alerts_dismissed") === "1") setDismissed(true);
-    if (localStorage.getItem("bastan_alerts_collapsed") === "1") setCollapsed(true);
+    queueMicrotask(() => {
+      if (localStorage.getItem("bastan_alerts_dismissed") === "1") setDismissed(true);
+      if (localStorage.getItem("bastan_alerts_collapsed") === "1") setCollapsed(true);
+    });
   }, []);
 
   function handleDismiss() {
@@ -40,8 +42,6 @@ export function DashboardAlerts({ emailVerified, hasPhone, linkedPersonId, isGoo
   const showLinkAlert = !linkedPersonId;
 
   const totalPending = [showEmailAlert, showPhoneAlert, showLinkAlert].filter(Boolean).length;
-  const totalItems = [true, showPhoneAlert, showLinkAlert].filter(Boolean).length; // email always counts if not google
-
   if (!showEmailAlert && !showPhoneAlert && !showLinkAlert) return null;
   if (dismissed) return null;
 

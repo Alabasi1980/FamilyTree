@@ -315,7 +315,6 @@ export function HomelandExplorer({ countries }: HomelandExplorerProps) {
       items.push({ label: selectedRegion.name });
     }
     return items;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, selectedCountry, selectedRegion]);
 
   // Filtered current items

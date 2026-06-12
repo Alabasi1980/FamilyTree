@@ -83,8 +83,8 @@ async function seedHomelandPlaces() {
         });
         nameToId.set(place.name, rec.id);
         created++;
-      } catch (e: any) {
-        if (e.code === "P2002") {
+      } catch (e: unknown) {
+        if (typeof e === "object" && e !== null && "code" in e && e.code === "P2002") {
           skipped++;
         } else {
           throw e;
@@ -102,22 +102,31 @@ async function main() {
   console.log("🌱 Starting seed...");
 
   // System admin
-  const adminEmail = "admin@families-tree.local";
-  const existingAdmin = await db.user.findFirst({ where: { email: adminEmail } });
+  const adminEmail = process.env.SEED_SYSTEM_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword = process.env.SEED_SYSTEM_ADMIN_PASSWORD;
 
-  if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash("Admin@1234", 12);
-    await db.user.create({
-      data: {
-        fullName: "مدير النظام",
-        email: adminEmail,
-        passwordHash,
-        accountType: "SYSTEM_ADMIN",
-      },
-    });
-    console.log("✅ Created system admin: admin@families-tree.local / Admin@1234");
+  if (adminEmail || adminPassword) {
+    if (!adminEmail || !adminPassword || adminPassword.length < 12) {
+      throw new Error("SEED_SYSTEM_ADMIN_EMAIL and SEED_SYSTEM_ADMIN_PASSWORD (min 12 chars) are required together");
+    }
+
+    const existingAdmin = await db.user.findFirst({ where: { email: adminEmail } });
+    if (!existingAdmin) {
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      await db.user.create({
+        data: {
+          fullName: process.env.SEED_SYSTEM_ADMIN_NAME?.trim() || "مدير النظام",
+          email: adminEmail,
+          passwordHash,
+          accountType: "SYSTEM_ADMIN",
+        },
+      });
+      console.log(`✅ Created system admin: ${adminEmail}`);
+    } else {
+      console.log("ℹ️  System admin already exists");
+    }
   } else {
-    console.log("ℹ️  System admin already exists");
+    console.log("ℹ️  Skipped system admin seed; SEED_SYSTEM_ADMIN_EMAIL/PASSWORD are not set");
   }
 
   // Homeland places

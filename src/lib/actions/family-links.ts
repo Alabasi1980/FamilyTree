@@ -240,57 +240,7 @@ export async function addFamilyLink(
   linkType: "KINSHIP" | "IN_LAW",
   description?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth();
-  if (!session?.user) return { success: false, error: "غير مصرح" };
-  if (familyAId === familyBId) return { success: false, error: "لا يمكن ربط العائلة بنفسها" };
-
-  const isSystemAdmin = session.user.accountType === "SYSTEM_ADMIN";
-  const isFamilyAdmin = await db.familyAdminAssignment.findFirst({
-    where: { familyId: familyAId, userId: session.user.id, isActive: true },
-  });
-  if (!isSystemAdmin && !isFamilyAdmin) {
-    return { success: false, error: "لا تملك صلاحية إضافة رابط لهذه العائلة" };
-  }
-
-  const [famA, famB] = await Promise.all([
-    db.family.findUnique({ where: { id: familyAId, deletedAt: null }, select: { id: true, slug: true } }),
-    db.family.findUnique({ where: { id: familyBId, deletedAt: null }, select: { id: true, slug: true } }),
-  ]);
-  if (!famA || !famB) return { success: false, error: "إحدى العائلتين غير موجودة" };
-
-  // Normalize order so (A,B) and (B,A) map to the same record
-  const [normA, normB] = [familyAId, familyBId].sort();
-
-  // Check for any existing link (including soft-deleted) to avoid unique constraint violation
-  const existing = await db.familyLink.findFirst({
-    where: {
-      OR: [
-        { familyAId: normA, familyBId: normB },
-        { familyAId: normB, familyBId: normA },
-      ],
-    },
-  });
-
-  if (existing && !existing.deletedAt) {
-    return { success: false, error: "يوجد ربط مسبق بين هاتين العائلتين" };
-  }
-
-  if (existing && existing.deletedAt) {
-    // Restore the soft-deleted link
-    await db.familyLink.update({
-      where: { id: existing.id },
-      data: { deletedAt: null, status: "APPROVED", linkType, description: description?.trim() ?? null },
-    });
-  } else {
-    await db.familyLink.create({
-      data: { familyAId: normA, familyBId: normB, linkType, description: description?.trim() ?? null, status: "APPROVED" },
-    });
-  }
-
-  revalidatePath(`/family/${famA.slug}`);
-  revalidatePath(`/family/${famB.slug}`);
-  revalidatePath(`/dashboard/families/${familyAId}`);
-  return { success: true };
+  return proposeFamilyLink(familyAId, familyBId, linkType, description);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

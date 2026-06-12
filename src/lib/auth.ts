@@ -67,10 +67,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           select: { accountType: true, email: true },
         });
 
-        const SYSTEM_ADMIN_EMAILS = ["mjd.alabasi@gmail.com"];
+        const systemAdminEmails = (process.env.SYSTEM_ADMIN_EMAILS ?? "")
+          .split(",")
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
         // نفحص البريد من DB أو من كائن المستخدم (Google يُرسله مباشرة)
         const email = dbUser?.email ?? user.email ?? "";
-        const isPermAdmin = SYSTEM_ADMIN_EMAILS.includes(email);
+        const isPermAdmin = systemAdminEmails.includes(email.toLowerCase());
 
         if (isPermAdmin) {
           // ترقية فورية إذا لم يكن مدير نظام بعد
@@ -98,4 +101,3 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
-

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { TreePine, X, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { withBasePath } from "@/lib/base-path";
 
 interface Props {
   userName: string;
@@ -14,11 +13,10 @@ export function WelcomeBanner({ userName }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(searchParams.get("welcome") === "1");
 
   useEffect(() => {
     if (searchParams.get("welcome") === "1") {
-      setVisible(true);
       // Remove the param from URL without navigation
       const params = new URLSearchParams(searchParams.toString());
       params.delete("welcome");

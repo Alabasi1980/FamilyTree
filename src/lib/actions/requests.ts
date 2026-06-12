@@ -13,6 +13,7 @@ import {
   requestFocusHref,
 } from "@/lib/notifications";
 import { getHomelandPlacePathFields } from "@/lib/actions/homelands";
+import type { ParentChildRelationType, RelationConfidence } from "@/generated/prisma/client";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,8 @@ type RelationPayload = {
   parentId?: string;
   childId?: string;
   operation?: "ADD_PARENT_CHILD" | "REMOVE_PARENT_CHILD";
+  relationType?: ParentChildRelationType;
+  confidence?: RelationConfidence;
 };
 
 type FamilyInfoPayload = {
@@ -79,6 +82,68 @@ type FamilyInfoPayload = {
   isPublic?: boolean;
 };
 
+const currentYear = new Date().getFullYear();
+const optionalText = (max: number) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().max(max).optional()
+  );
+const optionalYear = z.preprocess(
+  (value) => {
+    if (value === "" || value === null || value === undefined) return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : value;
+  },
+  z.number().int().min(1).max(currentYear + 1).optional()
+);
+const optionalDateText = optionalText(20);
+const requestPersonSchema = z.object({
+  fullName: z.string().min(2).max(200),
+  kunya: optionalText(80),
+  gender: z.enum(["MALE", "FEMALE"]),
+  isLiving: z.boolean().default(true),
+  birthYear: optionalYear,
+  birthDate: optionalDateText,
+  birthPlace: optionalText(160),
+  deathYear: optionalYear,
+  deathDate: optionalDateText,
+  bloodType: optionalText(12),
+  residenceCity: optionalText(120),
+  address: optionalText(240),
+  profession: optionalText(120),
+  biography: z.string().max(2000).optional(),
+  notes: z.string().max(500).optional(),
+  photoUrl: optionalText(500),
+  visibilityLevel: z.enum(["PUBLIC", "MEMBER", "ADMIN", "SHARED_LINK"]).optional(),
+});
+
+function normalizeRequestPersonPayload(data: z.infer<typeof requestPersonSchema>): PersonEditPayload {
+  const birthYear = data.birthYear ?? (data.birthDate ? new Date(data.birthDate).getFullYear() : null);
+  const deathYear = data.deathYear ?? (data.deathDate ? new Date(data.deathDate).getFullYear() : null);
+  return {
+    ...data,
+    birthYear,
+    deathYear,
+    isLiving: deathYear || data.deathDate ? false : data.isLiving,
+    visibilityLevel: data.visibilityLevel ?? defaultVisibilityForGender(data.gender),
+  };
+}
+
+async function parseAndValidatePersonPayload(payloadJson: unknown) {
+  const parsed = requestPersonSchema.safeParse(payloadJson);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "بيانات طلب الفرد غير صحيحة");
+  }
+
+  const payload = normalizeRequestPersonPayload(parsed.data);
+  const { validatePersonChronology } = await import("@/lib/domain/family-rules/chronology-validators");
+  const chronoResult = validatePersonChronology(payload);
+  if (chronoResult.status === "PROHIBITED") {
+    throw new Error(chronoResult.message);
+  }
+  return payload;
+}
+
 const joinFamilyAdminRequestSchema = z.object({
   applicantRelationship: z.string().trim().min(2, "اكتب صلتك بالعائلة").max(120),
   applicantMessage: z.string().trim().min(20, "اكتب سبب الطلب بتفصيل كاف").max(1000),
@@ -92,15 +157,17 @@ const notificationLabels = {
   rejected: "تم رفض طلبك",
 };
 
+type EditRequestDb = Pick<typeof db, "person" | "personAncestry" | "family">;
+
 async function applyEditRequest(req: {
   familyId: string;
   requestType: string;
   targetId: string | null;
   payloadJson: unknown;
-}) {
+}, client: EditRequestDb = db) {
   if (req.requestType === "ADD_PERSON") {
-    const payload = req.payloadJson as PersonEditPayload & { familyId?: string };
-    const person = await db.person.create({
+    const payload = await parseAndValidatePersonPayload(req.payloadJson);
+    const person = await client.person.create({
       data: {
         familyId: req.familyId,
         fullName: payload.fullName,
@@ -122,7 +189,7 @@ async function applyEditRequest(req: {
         visibilityLevel: payload.visibilityLevel ?? defaultVisibilityForGender(payload.gender),
       },
     });
-    await db.personAncestry.create({
+    await client.personAncestry.create({
       data: { ancestorId: person.id, descendantId: person.id, depth: 0 },
     });
     return;
@@ -130,8 +197,44 @@ async function applyEditRequest(req: {
 
   if (req.requestType === "EDIT_PERSON") {
     if (!req.targetId) throw new Error("طلب تعديل الفرد لا يحتوي على هدف");
-    const payload = req.payloadJson as PersonEditPayload;
-    await db.person.update({
+    const payload = await parseAndValidatePersonPayload(req.payloadJson);
+    const currentPerson = await db.person.findFirst({
+      where: { id: req.targetId, familyId: req.familyId, deletedAt: null },
+      select: {
+        gender: true,
+        birthYear: true,
+        birthDate: true,
+        deathYear: true,
+        deathDate: true,
+      },
+    });
+    if (!currentPerson) throw new Error("الشخص غير موجود");
+
+    if (payload.gender !== currentPerson.gender) {
+      const { validateGenderChange } = await import("@/lib/domain/family-rules/gender-validators");
+      const genderResult = await validateGenderChange(req.targetId, payload.gender, db);
+      if (genderResult.status === "PROHIBITED") {
+        throw new Error(genderResult.message);
+      }
+    }
+
+    const datesChanged =
+      payload.birthYear !== currentPerson.birthYear ||
+      payload.deathYear !== currentPerson.deathYear ||
+      (payload.birthDate ? new Date(payload.birthDate).toISOString() : null) !==
+        (currentPerson.birthDate?.toISOString() ?? null) ||
+      (payload.deathDate ? new Date(payload.deathDate).toISOString() : null) !==
+        (currentPerson.deathDate?.toISOString() ?? null);
+
+    if (datesChanged) {
+      const { checkRetroactiveDateConflicts } = await import("@/lib/domain/family-rules/chronology-validators");
+      const conflicts = await checkRetroactiveDateConflicts(req.targetId, payload, db);
+      if (conflicts.length > 0) {
+        throw new Error(conflicts[0]?.message ?? "تعديل التواريخ يتعارض مع علاقات قائمة");
+      }
+    }
+
+    await client.person.update({
       where: { id: req.targetId, familyId: req.familyId, deletedAt: null },
       data: {
         fullName: payload.fullName,
@@ -159,7 +262,10 @@ async function applyEditRequest(req: {
   if (req.requestType === "ADD_RELATION") {
     const payload = req.payloadJson as RelationPayload;
     if (!payload.parentId || !payload.childId) throw new Error("طلب العلاقة لا يحتوي على طرفي العلاقة");
-    const result = await addParentChildRelation(payload.parentId, payload.childId);
+    const result = await addParentChildRelation(payload.parentId, payload.childId, {
+      relationType: payload.relationType,
+      confidence: payload.confidence,
+    });
     if (!result.success) throw new Error(result.error ?? "تعذر تطبيق طلب العلاقة");
     return;
   }
@@ -180,7 +286,7 @@ async function applyEditRequest(req: {
       payload.homelandPlaceId !== undefined && payload.homelandPlaceId
         ? await getHomelandPlacePathFields(payload.homelandPlaceId)
         : null;
-    await db.family.update({
+    await client.family.update({
       where: { id: req.familyId },
       data: {
         ...(payload.name ? { name: payload.name } : {}),
@@ -243,22 +349,32 @@ export async function reviewRequest(
       return { success: false, error: "غير مصرح لك بمراجعة هذا الطلب" };
     }
 
-    if (approve) {
-      try {
-        await applyEditRequest(req);
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "تعذر تطبيق الطلب",
-        };
+    try {
+      if (approve && (req.requestType === "ADD_PERSON" || req.requestType === "EDIT_PERSON" || req.requestType === "ADD_FAMILY_INFO" || req.requestType === "EDIT_FAMILY_INFO")) {
+        await db.$transaction(async (tx) => {
+          await applyEditRequest(req, tx);
+          await tx.editRequest.update({
+            where: { id: requestId },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data: { status, reviewedByUserId: userId, reviewNotes, reviewedAt: new Date() } as any,
+          });
+        });
+      } else {
+        if (approve) {
+          await applyEditRequest(req);
+        }
+        await db.editRequest.update({
+          where: { id: requestId },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: { status, reviewedByUserId: userId, reviewNotes, reviewedAt: new Date() } as any,
+        });
       }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "تعذر تطبيق الطلب",
+      };
     }
-
-    await db.editRequest.update({
-      where: { id: requestId },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: { status, reviewedByUserId: userId, reviewNotes, reviewedAt: new Date() } as any,
-    });
 
     // Only notify logged-in members (guest submissions have no userId to notify)
     if (req.submittedByUserId && req.submittedByUserId !== userId) {

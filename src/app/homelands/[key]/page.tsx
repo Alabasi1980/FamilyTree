@@ -8,7 +8,6 @@ import { FamilyShareButton } from "@/components/families/family-share-button";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { parseFamilyHomelandKey, unspecifiedHomelandKey } from "@/lib/family-homeland";
-import { withBasePath } from "@/lib/base-path";
 
 interface Props {
   params: Promise<{ key: string }>;

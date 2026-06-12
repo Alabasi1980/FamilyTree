@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { TreePine, Loader2, LogOut } from "lucide-react";

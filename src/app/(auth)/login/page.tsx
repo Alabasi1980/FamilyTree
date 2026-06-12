@@ -58,29 +58,27 @@ function LoginError({ kind }: { kind: ErrorKind }) {
   );
 }
 
+function getOauthErrorKind(): ErrorKind | null {
+  if (typeof window === "undefined") return null;
+  const error = new URLSearchParams(window.location.search).get("error");
+  if (error === "OAuthAccountNotLinked") return "oauth_not_linked";
+  return error ? "oauth_failed" : null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
-  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(() => getOauthErrorKind());
 
   useEffect(() => {
-    // اقرأ خطأ OAuth القادم من NextAuth في رابط العودة (?error=...).
-    const errorParam = new URLSearchParams(window.location.search).get("error");
-    if (errorParam) {
-      setErrorKind(errorParam === "OAuthAccountNotLinked" ? "oauth_not_linked" : "oauth_failed");
-      setCheckingSession(false);
-      return;
-    }
+    if (getOauthErrorKind()) return;
 
     // طبقة احتياطية لتجربة TWA: إن عاد المستخدم من Google والجلسة قائمة،
     // وجّهه للوحة التحكم بدل بقائه عالقاً في صفحة الدخول.
     getSession().then((session) => {
       if (session?.user) {
         router.replace("/dashboard");
-      } else {
-        setCheckingSession(false);
       }
     });
   }, [router]);

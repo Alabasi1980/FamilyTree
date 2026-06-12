@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Search, TreePine, User, Users } from "lucide-react";
+import { Search, TreePine, Users } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { FamilyCard } from "@/components/families/family-card";
 import { PublicSearchForm } from "@/components/search/public-search-form";
