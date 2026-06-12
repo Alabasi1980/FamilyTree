@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { TreePine, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { withBasePath } from "@/lib/base-path";
 import { checkLoginReason } from "@/lib/actions/auth";
 
-type ErrorKind = "no_account" | "google_only" | "wrong_password" | "unknown";
+type ErrorKind =
+  | "no_account"
+  | "google_only"
+  | "wrong_password"
+  | "oauth_not_linked"
+  | "oauth_failed"
+  | "unknown";
 
 function LoginError({ kind }: { kind: ErrorKind }) {
   const messages: Record<ErrorKind, { title: string; hint?: string }> = {
@@ -25,6 +31,14 @@ function LoginError({ kind }: { kind: ErrorKind }) {
     wrong_password: {
       title: "كلمة المرور غير صحيحة.",
       hint: "تأكد من الكتابة، أو سجّل دخولك بـ Google إن كنت أنشأت حسابك به.",
+    },
+    oauth_not_linked: {
+      title: "هذا البريد مسجّل بطريقة دخول أخرى.",
+      hint: "سجّل الدخول بنفس الطريقة التي أنشأت بها حسابك (البريد وكلمة المرور).",
+    },
+    oauth_failed: {
+      title: "تعذّر تسجيل الدخول بـ Google.",
+      hint: "حاول مرة أخرى، أو ادخل ببريدك وكلمة المرور.",
     },
     unknown: {
       title: "تعذّر تسجيل الدخول.",
@@ -49,6 +63,27 @@ export default function LoginPage() {
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    // اقرأ خطأ OAuth القادم من NextAuth في رابط العودة (?error=...).
+    const errorParam = new URLSearchParams(window.location.search).get("error");
+    if (errorParam) {
+      setErrorKind(errorParam === "OAuthAccountNotLinked" ? "oauth_not_linked" : "oauth_failed");
+      setCheckingSession(false);
+      return;
+    }
+
+    // طبقة احتياطية لتجربة TWA: إن عاد المستخدم من Google والجلسة قائمة،
+    // وجّهه للوحة التحكم بدل بقائه عالقاً في صفحة الدخول.
+    getSession().then((session) => {
+      if (session?.user) {
+        router.replace("/dashboard");
+      } else {
+        setCheckingSession(false);
+      }
+    });
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

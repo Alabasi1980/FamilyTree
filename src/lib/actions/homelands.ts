@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { createNotifications, getSystemAdminUserIds } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getCountryFlag } from "@/lib/country-flags";
+import { getFamilyHomelandKey } from "@/lib/family-homeland";
 
 type HomelandPlaceType = "COUNTRY" | "REGION" | "CITY";
 
@@ -377,4 +379,152 @@ export async function getHomelandPlacePathFields(placeId?: string | null) {
     homelandRegion: place.parent?.name ?? null,
     homelandCity: place.name,
   };
+}
+
+// ── Explorer Data ─────────────────────────────────────────────────────────────
+
+export interface ExplorerCity {
+  id: string;
+  name: string;
+  familyCount: number;
+  personCount: number;
+  homelandKey: string;
+}
+
+export interface ExplorerRegion {
+  id: string;
+  name: string;
+  cityCount: number;
+  totalFamilyCount: number;
+  totalPersonCount: number;
+  cities: ExplorerCity[];
+}
+
+export interface ExplorerCountry {
+  id: string;
+  name: string;
+  flag: string;
+  regionCount: number;
+  totalFamilyCount: number;
+  totalPersonCount: number;
+  regions: ExplorerRegion[];
+}
+
+export async function getHomelandExplorerData(): Promise<ExplorerCountry[]> {
+  const [places, families] = await Promise.all([
+    db.homelandPlace.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true, type: true, parentId: true, sortOrder: true },
+    }),
+    db.family.findMany({
+      where: { isPublic: true, deletedAt: null },
+      select: {
+        homelandCountry: true,
+        homelandRegion: true,
+        homelandCity: true,
+        _count: { select: { persons: true } },
+      },
+    }),
+  ]);
+
+  // Build lookup maps
+  const countriesByNorm = new Map<string, (typeof places)[0]>();
+  const regionsByKey = new Map<string, (typeof places)[0]>();
+  const citiesByKey = new Map<string, (typeof places)[0]>();
+  const regionsByCountry = new Map<string, (typeof places)[0][]>();
+  const citiesByRegion = new Map<string, (typeof places)[0][]>();
+
+  for (const place of places) {
+    const norm = normalizeName(place.name);
+    if (place.type === "COUNTRY") {
+      countriesByNorm.set(norm, place);
+    } else if (place.type === "REGION" && place.parentId) {
+      regionsByKey.set(`${place.parentId}__${norm}`, place);
+      const list = regionsByCountry.get(place.parentId) ?? [];
+      list.push(place);
+      regionsByCountry.set(place.parentId, list);
+    } else if (place.type === "CITY" && place.parentId) {
+      citiesByKey.set(`${place.parentId}__${norm}`, place);
+      const list = citiesByRegion.get(place.parentId) ?? [];
+      list.push(place);
+      citiesByRegion.set(place.parentId, list);
+    }
+  }
+
+  // Aggregate family + person counts per place
+  type Stats = { familyCount: number; personCount: number };
+  const cityStats = new Map<string, Stats>();
+  const regionStats = new Map<string, Stats>();
+  const countryStats = new Map<string, Stats>();
+
+  function addStats(map: Map<string, Stats>, id: string, persons: number) {
+    const s = map.get(id) ?? { familyCount: 0, personCount: 0 };
+    map.set(id, { familyCount: s.familyCount + 1, personCount: s.personCount + persons });
+  }
+
+  for (const family of families) {
+    const cName = family.homelandCountry?.trim();
+    const rName = family.homelandRegion?.trim();
+    const ctName = family.homelandCity?.trim();
+    const persons = family._count.persons;
+
+    if (!cName) continue;
+    const country = countriesByNorm.get(normalizeName(cName));
+    if (!country) continue;
+    addStats(countryStats, country.id, persons);
+
+    if (!rName) continue;
+    const region = regionsByKey.get(`${country.id}__${normalizeName(rName)}`);
+    if (!region) continue;
+    addStats(regionStats, region.id, persons);
+
+    if (!ctName) continue;
+    const city = citiesByKey.get(`${region.id}__${normalizeName(ctName)}`);
+    if (!city) continue;
+    addStats(cityStats, city.id, persons);
+  }
+
+  // Build sorted tree
+  const sortPlaces = (arr: (typeof places)[0][]) =>
+    arr.slice().sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ar"));
+
+  const countriesRaw = sortPlaces(places.filter((p) => p.type === "COUNTRY"));
+
+  return countriesRaw.map((country) => {
+    const cStats = countryStats.get(country.id) ?? { familyCount: 0, personCount: 0 };
+    const regions = sortPlaces(regionsByCountry.get(country.id) ?? []).map((region) => {
+      const rStats = regionStats.get(region.id) ?? { familyCount: 0, personCount: 0 };
+      const cities = sortPlaces(citiesByRegion.get(region.id) ?? []).map((city) => {
+        const ctStats = cityStats.get(city.id) ?? { familyCount: 0, personCount: 0 };
+        return {
+          id: city.id,
+          name: city.name,
+          familyCount: ctStats.familyCount,
+          personCount: ctStats.personCount,
+          homelandKey: getFamilyHomelandKey({
+            homelandCountry: country.name,
+            homelandRegion: region.name,
+            homelandCity: city.name,
+          }),
+        };
+      });
+      return {
+        id: region.id,
+        name: region.name,
+        cityCount: cities.length,
+        totalFamilyCount: rStats.familyCount,
+        totalPersonCount: rStats.personCount,
+        cities,
+      };
+    });
+    return {
+      id: country.id,
+      name: country.name,
+      flag: getCountryFlag(country.name),
+      regionCount: regions.length,
+      totalFamilyCount: cStats.familyCount,
+      totalPersonCount: cStats.personCount,
+      regions,
+    };
+  });
 }

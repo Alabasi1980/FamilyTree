@@ -256,7 +256,8 @@ export async function reviewRequest(
 
     await db.editRequest.update({
       where: { id: requestId },
-      data: { status, reviewedByUserId: userId, reviewNotes },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { status, reviewedByUserId: userId, reviewNotes, reviewedAt: new Date() } as any,
     });
 
     // Only notify logged-in members (guest submissions have no userId to notify)

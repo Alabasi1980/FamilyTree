@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, MapPin, Users, TreePine, Globe, Lock } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { FamilyCard } from "@/components/families/family-card";
+import { FamilyShareButton } from "@/components/families/family-share-button";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { parseFamilyHomelandKey, unspecifiedHomelandKey } from "@/lib/family-homeland";
@@ -152,10 +153,10 @@ export default async function HomelandPage({ params }: Props) {
                 </div>
                 <ul className="divide-y divide-border/25">
                   {families.map((f) => (
-                    <li key={f.id}>
+                    <li key={f.id} className="flex items-center">
                       <Link
                         href={`/family/${f.slug}`}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors group"
+                        className="flex flex-1 items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors group min-w-0"
                       >
                         <span
                           className={`h-2 w-2 shrink-0 rounded-full ${
@@ -179,6 +180,9 @@ export default async function HomelandPage({ params }: Props) {
                           )}
                         </Badge>
                       </Link>
+                      <div className="px-2">
+                        <FamilyShareButton familyName={f.name} familySlug={f.slug} />
+                      </div>
                     </li>
                   ))}
                 </ul>
